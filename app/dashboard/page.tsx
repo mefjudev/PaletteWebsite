@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
-import { collection, addDoc, query, where, getDocs, onSnapshot, doc, deleteDoc, updateDoc, getDoc, setDoc, arrayUnion, arrayRemove, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, query, where, getDocs, getDocsFromServer, onSnapshot, doc, deleteDoc, updateDoc, getDoc, setDoc, arrayUnion, arrayRemove, serverTimestamp } from 'firebase/firestore';
 import ImageUpload from '@/components/ImageUpload';
 import MaterialSchedule from '@/components/MaterialSchedule';
 import { BIMItem } from '@/lib/types/bim';
@@ -91,12 +91,11 @@ export default function DashboardPage() {
       console.log('Setting up project listener for user:', user.uid);
       
       // Fetch user's own projects
-      // Use getDocs first to force server fetch, then set up real-time listener
       const q = query(collection(db, 'projects'), where('userId', '==', user.uid));
       
-      // Force initial server fetch to bypass cache
-      getDocs(q).then((snapshot) => {
-        console.log('Initial server fetch:', {
+      // Force initial server fetch to bypass cache completely
+      getDocsFromServer(q).then((snapshot) => {
+        console.log('Initial server fetch (forced from server):', {
           size: snapshot.size,
           empty: snapshot.empty,
           fromCache: snapshot.metadata.fromCache
@@ -109,9 +108,24 @@ export default function DashboardPage() {
           })) as SavedProject[];
           console.log('Initial projects loaded from server:', projects.map(p => p.name));
           setSavedProjects(projects.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
+        } else {
+          console.warn('Server returned 0 projects. Checking Firestore rules and query...');
+          // Try a direct query to debug
+          console.log('Query details:', {
+            collection: 'projects',
+            whereClause: `userId == ${user.uid}`,
+            userUid: user.uid
+          });
         }
-      }).catch((error) => {
-        console.error('Error in initial server fetch:', error);
+      }).catch((error: any) => {
+        console.error('Error in initial server fetch:', {
+          code: error?.code,
+          message: error?.message,
+          stack: error?.stack
+        });
+        if (error?.code === 'permission-denied') {
+          setError('Permission denied. Please check your Firestore security rules.');
+        }
       });
       
       // Set up real-time listener
