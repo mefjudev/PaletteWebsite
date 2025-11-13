@@ -106,26 +106,6 @@ export default function DashboardPage() {
     let unsubscribe: (() => void) | null = null;
     let unsubscribeShared: (() => void) | null = null;
     
-    // CRITICAL: Wait for Firestore network to be enabled before doing ANY queries
-    // On Vercel, Firestore might initialize in offline mode
-    const waitForConnection = async () => {
-      // Import enableNetwork here to ensure it's available
-      const { enableNetwork } = await import('firebase/firestore');
-      
-      // Force enable network and wait for it
-      try {
-        await enableNetwork(db);
-        console.log('✅ Firestore network explicitly enabled');
-        // Give it time to establish connection
-        await new Promise(resolve => setTimeout(resolve, 2000));
-      } catch (error: any) {
-        console.error('❌ Could not enable network:', error);
-      }
-      
-      // Now proceed with queries
-      loadProjects();
-    };
-    
     // Try to load projects with retry logic
     const loadProjects = async (retries = 3) => {
         try {
@@ -222,6 +202,26 @@ export default function DashboardPage() {
             setError(`Failed to load projects: ${error?.message || 'Unknown error'}`);
           }
         }
+      };
+      
+      // CRITICAL: Wait for Firestore network to be enabled before doing ANY queries
+      // On Vercel, Firestore might initialize in offline mode
+      const waitForConnection = async () => {
+        // Import enableNetwork here to ensure it's available
+        const { enableNetwork } = await import('firebase/firestore');
+        
+        // Force enable network and wait for it
+        try {
+          await enableNetwork(db);
+          console.log('✅ Firestore network explicitly enabled');
+          // Give it time to establish connection
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        } catch (error: any) {
+          console.error('❌ Could not enable network:', error);
+        }
+        
+        // Now proceed with queries
+        loadProjects();
       };
       
       // Start by ensuring network is enabled, then load projects
