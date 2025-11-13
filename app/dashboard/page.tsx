@@ -86,7 +86,11 @@ export default function DashboardPage() {
           id: doc.id,
           ...doc.data()
         })) as SavedProject[];
+        console.log('Loaded projects:', projects.length, 'for user:', user.uid);
         setSavedProjects(projects.sort((a, b) => b.createdAt?.seconds - a.createdAt?.seconds));
+      }, (error) => {
+        console.error('Error loading projects:', error);
+        setError('Failed to load projects. Check browser console for details.');
       });
 
       // Fetch projects shared with this user
