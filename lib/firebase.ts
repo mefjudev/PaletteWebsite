@@ -1,6 +1,6 @@
 import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
 import { getAuth, Auth } from 'firebase/auth';
-import { getFirestore, Firestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, enableNetwork, disableNetwork } from 'firebase/firestore';
+import { getFirestore, Firestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, enableNetwork, disableNetwork, doc, getDoc } from 'firebase/firestore';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -46,6 +46,17 @@ if (typeof window !== 'undefined') {
       // Force enable network connection on Vercel
       enableNetwork(db).then(() => {
         console.log('✅ Firestore network enabled');
+        
+        // Test connection immediately
+        setTimeout(async () => {
+          try {
+            const testRef = doc(db, '_test', 'connection');
+            await getDoc(testRef);
+            console.log('✅ Firestore connection test passed');
+          } catch (error: any) {
+            console.error('❌ Firestore connection test failed:', error?.code, error?.message);
+          }
+        }, 500);
       }).catch((error) => {
         console.warn('⚠️ Could not enable Firestore network:', error);
       });

@@ -97,6 +97,27 @@ export default function DashboardPage() {
       // Try to load projects with retry logic
       const loadProjects = async (retries = 3) => {
         try {
+          // First, test if we can reach Firestore at all by trying to read a document
+          // This helps diagnose if it's a query issue or a general connectivity issue
+          try {
+            const testDocRef = doc(db, 'projects', 'test-connection');
+            await getDoc(testDocRef);
+            console.log('✅ Can reach Firestore (test document read)');
+          } catch (testError: any) {
+            if (testError?.code === 'unavailable') {
+              console.error('❌ CRITICAL: Cannot reach Firestore servers at all. This is a network connectivity issue.');
+              console.error('Possible causes:');
+              console.error('1. Firestore service not enabled in Firebase Console');
+              console.error('2. Network/firewall blocking Firestore endpoints');
+              console.error('3. Firestore database location issue');
+              if (retries > 0) {
+                console.warn(`Retrying in 3s... (${retries} retries left)`);
+                setTimeout(() => loadProjects(retries - 1), 3000);
+                return;
+              }
+            }
+          }
+          
           // First try: regular getDocs (uses cache if available, server if connected)
           let snapshot = await getDocs(q);
           
