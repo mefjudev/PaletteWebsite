@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
-import { collection, addDoc, query, where, getDocs, getDocsFromServer, onSnapshot, doc, deleteDoc, updateDoc, getDoc, setDoc, arrayUnion, arrayRemove, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, query, where, getDocs, getDocsFromServer, getDocsFromCache, onSnapshot, doc, deleteDoc, updateDoc, getDoc, setDoc, arrayUnion, arrayRemove, serverTimestamp } from 'firebase/firestore';
 import ImageUpload from '@/components/ImageUpload';
 import MaterialSchedule from '@/components/MaterialSchedule';
 import { BIMItem } from '@/lib/types/bim';
@@ -93,9 +93,9 @@ export default function DashboardPage() {
       // Fetch user's own projects
       const q = query(collection(db, 'projects'), where('userId', '==', user.uid));
       
-      // Force initial server fetch to bypass cache completely
+      // Try server fetch first, fallback to cache if unavailable
       getDocsFromServer(q).then((snapshot) => {
-        console.log('Initial server fetch (forced from server):', {
+        console.log('✅ Initial server fetch (forced from server):', {
           size: snapshot.size,
           empty: snapshot.empty,
           fromCache: snapshot.metadata.fromCache
@@ -106,11 +106,10 @@ export default function DashboardPage() {
             id: doc.id,
             ...doc.data()
           })) as SavedProject[];
-          console.log('Initial projects loaded from server:', projects.map(p => p.name));
+          console.log('✅ Initial projects loaded from server:', projects.map(p => p.name));
           setSavedProjects(projects.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
         } else {
-          console.warn('Server returned 0 projects. Checking Firestore rules and query...');
-          // Try a direct query to debug
+          console.warn('⚠️ Server returned 0 projects. Checking Firestore rules and query...');
           console.log('Query details:', {
             collection: 'projects',
             whereClause: `userId == ${user.uid}`,
@@ -118,13 +117,43 @@ export default function DashboardPage() {
           });
         }
       }).catch((error: any) => {
-        console.error('Error in initial server fetch:', {
-          code: error?.code,
-          message: error?.message,
-          stack: error?.stack
-        });
-        if (error?.code === 'permission-denied') {
+        console.warn('⚠️ Server fetch failed, trying cache as fallback:', error?.code);
+        
+        // If server is unavailable, try cache as fallback
+        if (error?.code === 'unavailable') {
+          getDocsFromCache(q).then((snapshot) => {
+            console.log('📦 Cache fallback result:', {
+              size: snapshot.size,
+              fromCache: snapshot.metadata.fromCache
+            });
+            
+            if (snapshot.size > 0) {
+              const projects = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+              })) as SavedProject[];
+              console.log('📦 Projects loaded from cache:', projects.map(p => p.name));
+              setSavedProjects(projects.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
+            } else {
+              console.error('❌ Both server and cache returned 0 projects. This suggests:');
+              console.error('1. Firestore rules may be blocking the query');
+              console.error('2. Network connectivity issue');
+              console.error('3. Projects may not exist for this user ID');
+              setError('Unable to load projects. Check console for details.');
+            }
+          }).catch((cacheError: any) => {
+            console.error('❌ Cache fallback also failed:', cacheError);
+            if (error?.code === 'permission-denied' || cacheError?.code === 'permission-denied') {
+              setError('Permission denied. Please check your Firestore security rules.');
+            } else {
+              setError('Unable to connect to Firestore. Please check your network connection.');
+            }
+          });
+        } else if (error?.code === 'permission-denied') {
           setError('Permission denied. Please check your Firestore security rules.');
+        } else {
+          console.error('❌ Unexpected error:', error);
+          setError(`Failed to load projects: ${error?.message || 'Unknown error'}`);
         }
       });
       
