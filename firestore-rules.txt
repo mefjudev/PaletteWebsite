@@ -1,0 +1,47 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Projects collection - allows sharing with read-only access
+    match /projects/{projectId} {
+      // Allow users to read their own projects
+      allow read: if request.auth != null && request.auth.uid == resource.data.userId;
+      
+      // Allow users to read projects shared with them (read-only)
+      allow read: if request.auth != null && request.auth.uid in resource.data.get('sharedWith', []);
+      
+      // Allow users to write their own projects
+      allow write: if request.auth != null && request.auth.uid == resource.data.userId;
+      
+      // Allow create if user sets their own userId
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      
+      // Allow owners to update sharing fields
+      allow update: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+    
+    // Users collection - public read for email lookup (needed for sharing)
+    match /users/{userId} {
+      // Allow users to read any user document (for email lookup)
+      allow read: if request.auth != null;
+      
+      // Allow users to create/update their own user document
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Invitations collection - for storing pending invitations
+    match /invitations/{invitationId} {
+      // Allow users to read invitations sent to their email
+      allow read: if request.auth != null && request.auth.token.email == resource.data.email;
+      
+      // Allow project owners to create invitations for their projects
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.inviterId;
+      
+      // Allow users to update their own invitations (when accepting)
+      allow update: if request.auth != null && request.auth.token.email == resource.data.email;
+      
+      // Allow project owners to update invitations (when cancelling)
+      allow update: if request.auth != null && request.auth.uid == resource.data.inviterId;
+    }
+  }
+}
+
