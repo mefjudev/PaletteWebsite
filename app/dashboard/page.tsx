@@ -55,25 +55,22 @@ export default function DashboardPage() {
         setUser(currentUser);
         
         // Ensure user record exists in Firestore for sharing functionality
-        // Retry logic for network issues
-        const ensureUserRecord = async (retries = 3) => {
+        // Use setDoc with merge to avoid read-then-write (more reliable)
+        const ensureUserRecord = async (retries = 2) => {
           try {
             const userDocRef = doc(db, 'users', currentUser.uid);
-            const userDoc = await getDoc(userDocRef);
-            
-            if (!userDoc.exists()) {
-              // Create user record if it doesn't exist
-              await setDoc(userDocRef, {
-                email: currentUser.email?.toLowerCase() || '',
-                uid: currentUser.uid,
-                createdAt: new Date()
-              });
-            }
+            // Use setDoc with merge - it will create if doesn't exist, update if it does
+            await setDoc(userDocRef, {
+              email: currentUser.email?.toLowerCase() || '',
+              uid: currentUser.uid,
+              createdAt: new Date()
+            }, { merge: true });
+            console.log('User record ensured successfully');
           } catch (error: any) {
             // If it's a network error and we have retries left, try again
             if ((error?.code === 'unavailable' || error?.code === 'deadline-exceeded') && retries > 0) {
               console.warn(`Retrying user record creation (${retries} retries left)...`);
-              setTimeout(() => ensureUserRecord(retries - 1), 1000);
+              setTimeout(() => ensureUserRecord(retries - 1), 2000);
             } else {
               console.warn('Could not ensure user record exists (non-critical):', error?.code || error?.message);
               // Continue even if user record creation fails - not critical for app functionality
@@ -81,7 +78,8 @@ export default function DashboardPage() {
           }
         };
         
-        ensureUserRecord();
+        // Delay slightly to let Firebase connect first
+        setTimeout(() => ensureUserRecord(), 500);
       }
     });
 
