@@ -114,129 +114,29 @@ export default function DashboardPage() {
     }
     listenersSetupRef.current = true;
     
-    // Try to load projects with retry logic
-    const loadProjects = async (retries = 3) => {
-        try {
-          
-          // Try server fetch FIRST on Vercel (skip cache entirely)
-          let snapshot;
-          try {
-            console.log('🔄 Attempting direct server fetch (bypassing cache)...');
-            snapshot = await getDocsFromServer(q);
-            console.log('✅ Server fetch successful');
-          } catch (serverError: any) {
-            if (serverError?.code === 'unavailable') {
-              console.error('❌ CRITICAL: Cannot reach Firestore servers from Vercel');
-              console.error('This suggests:');
-              console.error('1. Firestore endpoints may be blocked by Vercel network policies');
-              console.error('2. Environment variables may be incorrect (check projectId)');
-              console.error('3. Firestore database may not be in the expected region');
-              console.error('Error details:', {
-                code: serverError?.code,
-                message: serverError?.message,
-                stack: serverError?.stack?.substring(0, 200)
-              });
-              
-              if (retries > 0) {
-                console.warn(`⚠️ Retrying in 3s... (${retries} retries left)`);
-                setTimeout(() => loadProjects(retries - 1), 3000);
-                return;
-              } else {
-                // Fallback to regular getDocs as last resort
-                console.warn('⚠️ Falling back to regular getDocs (may use cache)...');
-                snapshot = await getDocs(q);
-              }
-            } else {
-              throw serverError;
-            }
-          }
-          
-          console.log('📊 Projects query result:', {
-            size: snapshot.size,
-            empty: snapshot.empty,
-            fromCache: snapshot.metadata.fromCache,
-            hasPendingWrites: snapshot.metadata.hasPendingWrites
-          });
-          
-          const projects = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          })) as SavedProject[];
-          
-          if (projects.length > 0) {
-            console.log('✅ Projects loaded:', projects.map(p => p.name));
-            setSavedProjects(projects.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
-          } else {
-            console.warn('⚠️ No projects found. Query details:', {
-              collection: 'projects',
-              whereClause: `userId == ${user.uid}`,
-              userUid: user.uid,
-              fromCache: snapshot.metadata.fromCache
-            });
-            
-            // If from cache and empty, it might be stale - real-time listener will update
-            if (snapshot.metadata.fromCache) {
-              console.log('🔄 Cache returned empty, this might be stale. Real-time listener will update when connected.');
-            }
-          }
-        } catch (error: any) {
-          console.error('❌ Error loading projects:', {
-            code: error?.code,
-            message: error?.message,
-            name: error?.name,
-            retriesLeft: retries
-          });
-          
-          if (error?.code === 'permission-denied') {
-            setError('Permission denied. Please check your Firestore security rules.');
-          } else if (error?.code === 'failed-precondition') {
-            const errorMsg = error?.message || '';
-            const indexLink = errorMsg.match(/https:\/\/console\.firebase\.google\.com[^\s]+/)?.[0];
-            if (indexLink) {
-              console.error('❌ Firestore index required. Create it here:', indexLink);
-              setError(`Firestore index required. Check console for the creation link.`);
-            } else {
-              setError('Firestore index required. Go to Firebase Console → Firestore → Indexes');
-            }
-          } else if (error?.code === 'unavailable') {
-            if (retries > 0) {
-              console.warn(`⚠️ Firestore unavailable, retrying in 2s... (${retries} retries left)`);
-              setTimeout(() => loadProjects(retries - 1), 2000);
-            } else {
-              console.warn('⚠️ Firestore unavailable after retries. Real-time listener will sync when connection is restored.');
-            }
-          } else {
-            console.error('❌ Unexpected error:', error);
-            setError(`Failed to load projects: ${error?.message || 'Unknown error'}`);
-          }
-        }
-      };
+    // CRITICAL: Wait for Firestore network to be enabled before doing ANY queries
+    // On Vercel, Firestore might initialize in offline mode
+    const waitForConnection = async () => {
+      // Import enableNetwork here to ensure it's available
+      const { enableNetwork } = await import('firebase/firestore');
       
-      // CRITICAL: Wait for Firestore network to be enabled before doing ANY queries
-      // On Vercel, Firestore might initialize in offline mode
-      const waitForConnection = async () => {
-        // Import enableNetwork here to ensure it's available
-        const { enableNetwork } = await import('firebase/firestore');
-        
-        // Force enable network and wait for it
-        try {
-          await enableNetwork(db);
-          console.log('✅ Firestore network explicitly enabled');
-          // Give it time to establish connection
-          await new Promise(resolve => setTimeout(resolve, 2000));
-        } catch (error: any) {
-          console.error('❌ Could not enable network:', error);
-        }
-        
-        // Now proceed with queries
-        loadProjects();
-      };
+      // Force enable network and wait for it
+      try {
+        await enableNetwork(db);
+        console.log('✅ Firestore network explicitly enabled');
+        // Give it time to establish connection
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      } catch (error: any) {
+        console.error('❌ Could not enable network:', error);
+      }
+    };
+    
+    // Start by ensuring network is enabled
+    waitForConnection();
       
-      // Start by ensuring network is enabled, then load projects
-      waitForConnection();
-      
-      // Set up real-time listener - this will sync when connection is established
-      // Only set up ONE listener to avoid "already-exists" errors
+      // Set up real-time listener - this handles both initial load and updates
+      // DO NOT call getDocs/getDocsFromServer separately - onSnapshot handles everything
+      // This prevents "INTERNAL ASSERTION FAILED" errors from conflicting queries
       unsubscribe = onSnapshot(q, 
         (snapshot) => {
           const isFromCache = snapshot.metadata.fromCache;
