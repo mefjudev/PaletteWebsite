@@ -54,7 +54,6 @@ const MaterialSchedule: React.FC<MaterialScheduleProps> = ({ materials, isLoadin
   const [editedMaterials, setEditedMaterials] = useState<BIMItem[]>([]);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showToast, setShowToast] = useState(false);
-  const [newlyAddedCode, setNewlyAddedCode] = useState<string | null>(null);
 
   // Ensure materials is always a valid array
   const safeMaterials = useMemo(() => {
@@ -138,59 +137,10 @@ const MaterialSchedule: React.FC<MaterialScheduleProps> = ({ materials, isLoadin
     }
   };
 
-  // Generate next available code based on existing codes
-  const generateNextCode = (): string => {
-    if (editedMaterials.length === 0) {
-      return 'NEW-01';
-    }
-
-    // Find all code prefixes and their highest numbers
-    const codeMap = new Map<string, number>();
-    editedMaterials.forEach(item => {
-      if (item.code) {
-        const parts = item.code.split('-');
-        if (parts.length >= 2) {
-          const prefix = parts[0];
-          const num = parseInt(parts[1], 10);
-          if (!isNaN(num)) {
-            const currentMax = codeMap.get(prefix) || 0;
-            if (num > currentMax) {
-              codeMap.set(prefix, num);
-            }
-          }
-        }
-      }
-    });
-
-    // Try to find the most common prefix (e.g., if CT-01, CT-02 exist, use CT-03)
-    let mostCommonPrefix = 'NEW';
-    let maxCount = 0;
-    
-    editedMaterials.forEach(item => {
-      if (item.code) {
-        const parts = item.code.split('-');
-        if (parts.length >= 2) {
-          const prefix = parts[0];
-          const count = editedMaterials.filter(m => m.code?.startsWith(prefix + '-')).length;
-          if (count > maxCount) {
-            maxCount = count;
-            mostCommonPrefix = prefix;
-          }
-        }
-      }
-    });
-
-    // Generate next code for the most common prefix
-    const nextNum = (codeMap.get(mostCommonPrefix) || 0) + 1;
-    const numStr = nextNum.toString().padStart(2, '0');
-    return `${mostCommonPrefix}-${numStr}`;
-  };
-
-  // Handle adding a new row
+  // Handle adding a new row - creates a completely blank row
   const handleAddNewRow = () => {
-    const newCode = generateNextCode();
     const newItem: BIMItem = {
-      code: newCode,
+      code: '', // Completely blank - user will type the code manually
       area: '',
       location: '',
       finish: '',
@@ -206,7 +156,11 @@ const MaterialSchedule: React.FC<MaterialScheduleProps> = ({ materials, isLoadin
     const updated = [...editedMaterials, newItem];
     setEditedMaterials(updated);
     setHasUnsavedChanges(true);
-    setNewlyAddedCode(newCode); // Mark this as newly added for auto-selection
+    
+    // Auto-select the new row so user can start editing immediately
+    // The new row will be at the end initially, but will sort automatically when code is entered
+    const newIndex = updated.length - 1;
+    setSelectedRows(new Set([newIndex]));
 
     if (onMaterialsChange) {
       onMaterialsChange(updated);
@@ -278,16 +232,6 @@ const MaterialSchedule: React.FC<MaterialScheduleProps> = ({ materials, isLoadin
     });
   }, [filteredMaterials]);
 
-  // Auto-select newly added row after it's been sorted
-  useEffect(() => {
-    if (newlyAddedCode && sortedMaterials.length > 0) {
-      const index = sortedMaterials.findIndex(item => item.code === newlyAddedCode);
-      if (index >= 0) {
-        setSelectedRows(new Set([index]));
-        setNewlyAddedCode(null); // Clear the flag
-      }
-    }
-  }, [newlyAddedCode, sortedMaterials]);
 
   // Get available categories based on materials in the schedule
   const availableCategories = useMemo((): FilterCategory[] => {
