@@ -131,73 +131,46 @@ export default function DashboardPage() {
             }
           }
         } catch (error: any) {
-        console.log('📊 Projects query result:', {
-          size: snapshot.size,
-          empty: snapshot.empty,
-          fromCache: snapshot.metadata.fromCache,
-          hasPendingWrites: snapshot.metadata.hasPendingWrites
-        });
-        
-        const projects = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as SavedProject[];
-        
-        if (projects.length > 0) {
-          console.log('✅ Projects loaded:', projects.map(p => p.name));
-          setSavedProjects(projects.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
-        } else {
-          console.warn('⚠️ No projects found. Query details:', {
-            collection: 'projects',
-            whereClause: `userId == ${user.uid}`,
-            userUid: user.uid,
-            fromCache: snapshot.metadata.fromCache
+          console.error('❌ Error loading projects:', {
+            code: error?.code,
+            message: error?.message,
+            name: error?.name
           });
           
-          // If from cache and empty, it might be stale - try to force refresh
-          if (snapshot.metadata.fromCache) {
-            console.log('🔄 Cache returned empty, this might be stale. Real-time listener will update when connected.');
-          }
-        }
-      }).catch((error: any) => {
-        console.error('❌ Error loading projects:', {
-          code: error?.code,
-          message: error?.message,
-          name: error?.name
-        });
-        
-        if (error?.code === 'permission-denied') {
-          setError('Permission denied. Please check your Firestore security rules.');
-        } else if (error?.code === 'failed-precondition') {
-          const errorMsg = error?.message || '';
-          const indexLink = errorMsg.match(/https:\/\/console\.firebase\.google\.com[^\s]+/)?.[0];
-          if (indexLink) {
-            console.error('❌ Firestore index required. Create it here:', indexLink);
-            setError(`Firestore index required. Check console for the creation link.`);
+          if (error?.code === 'permission-denied') {
+            setError('Permission denied. Please check your Firestore security rules.');
+          } else if (error?.code === 'failed-precondition') {
+            const errorMsg = error?.message || '';
+            const indexLink = errorMsg.match(/https:\/\/console\.firebase\.google\.com[^\s]+/)?.[0];
+            if (indexLink) {
+              console.error('❌ Firestore index required. Create it here:', indexLink);
+              setError(`Firestore index required. Check console for the creation link.`);
+            } else {
+              setError('Firestore index required. Go to Firebase Console → Firestore → Indexes');
+            }
+          } else if (error?.code === 'unavailable') {
+            console.warn('⚠️ Firestore temporarily unavailable. Real-time listener will sync when connection is restored.');
+            // Don't show error - real-time listener will handle it
           } else {
-            setError('Firestore index required. Go to Firebase Console → Firestore → Indexes');
+            console.error('❌ Unexpected error:', error);
+            setError(`Failed to load projects: ${error?.message || 'Unknown error'}`);
           }
-        } else if (error?.code === 'unavailable') {
-          console.error('❌ Firestore unavailable from Vercel. This suggests:');
-          console.error('1. Network connectivity issue from Vercel to Firebase');
-          console.error('2. Firestore service might be blocked');
-          console.error('3. Check Firebase Console → Firestore → Data to verify projects exist');
-          console.warn('⚠️ Will retry when connection is restored. Real-time listener should work once connected.');
-          // Don't show error for unavailable - it's usually temporary, but log details
-        } else {
-          console.error('❌ Unexpected error:', error);
-          setError(`Failed to load projects: ${error?.message || 'Unknown error'}`);
         }
-      });
+      };
       
-      // Set up real-time listener
+      loadProjects();
+      
+      // Set up real-time listener - this will sync when connection is established
       const unsubscribe = onSnapshot(q, 
         (snapshot) => {
-          console.log('Projects snapshot received:', {
+          const isFromCache = snapshot.metadata.fromCache;
+          const hasPendingWrites = snapshot.metadata.hasPendingWrites;
+          
+          console.log('📡 Projects snapshot received:', {
             size: snapshot.size,
             empty: snapshot.empty,
-            hasPendingWrites: snapshot.metadata.hasPendingWrites,
-            fromCache: snapshot.metadata.fromCache
+            hasPendingWrites: hasPendingWrites,
+            fromCache: isFromCache
           });
           
           const projects = snapshot.docs.map(doc => ({
@@ -205,14 +178,15 @@ export default function DashboardPage() {
             ...doc.data()
           })) as SavedProject[];
           
-          console.log('Loaded projects:', projects.length, 'for user:', user.uid);
           if (projects.length > 0) {
-            console.log('Project names:', projects.map(p => p.name));
+            console.log('✅ Projects loaded:', projects.map(p => p.name), isFromCache ? '(from cache)' : '(from server)');
+            setSavedProjects(projects.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
+          } else if (!isFromCache) {
+            // Only warn if we got empty result from server (not cache)
+            console.warn('⚠️ Server returned 0 projects. Verify in Firebase Console that projects exist for user:', user.uid);
           } else {
-            console.warn('No projects found. Check Firestore console to verify projects exist for this user ID.');
+            console.log('🔄 Waiting for server connection... (currently using cache)');
           }
-          
-          setSavedProjects(projects.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
         }, 
         (error: any) => {
           console.error('Error loading projects:', {
