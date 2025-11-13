@@ -91,24 +91,46 @@ export default function DashboardPage() {
       console.log('Setting up project listener for user:', user.uid);
       console.log('Firestore instance:', db.app.name, 'Project ID:', db.app.options.projectId);
       
-      // Test Firestore connection first
-      const testConnection = async () => {
-        try {
-          const testDoc = doc(db, '_test', 'connection');
-          await getDoc(testDoc);
-          console.log('✅ Firestore connection test: OK');
-        } catch (error: any) {
-          console.error('❌ Firestore connection test failed:', error?.code, error?.message);
-        }
-      };
-      testConnection();
-      
       // Fetch user's own projects
       const q = query(collection(db, 'projects'), where('userId', '==', user.uid));
       
-      // Use regular getDocs which handles server/cache automatically
-      // This is more reliable than forcing server fetch
-      getDocs(q).then((snapshot) => {
+      // Wait a bit for Firestore to establish connection, then try query
+      // The real-time listener will handle updates once connected
+      const loadProjects = async () => {
+        try {
+          // Small delay to let Firestore initialize
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          const snapshot = await getDocs(q);
+          console.log('📊 Projects query result:', {
+            size: snapshot.size,
+            empty: snapshot.empty,
+            fromCache: snapshot.metadata.fromCache,
+            hasPendingWrites: snapshot.metadata.hasPendingWrites
+          });
+          
+          const projects = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          })) as SavedProject[];
+          
+          if (projects.length > 0) {
+            console.log('✅ Projects loaded:', projects.map(p => p.name));
+            setSavedProjects(projects.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
+          } else {
+            console.warn('⚠️ No projects found. Query details:', {
+              collection: 'projects',
+              whereClause: `userId == ${user.uid}`,
+              userUid: user.uid,
+              fromCache: snapshot.metadata.fromCache
+            });
+            
+            // If from cache and empty, it might be stale - real-time listener will update
+            if (snapshot.metadata.fromCache) {
+              console.log('🔄 Cache returned empty, this might be stale. Real-time listener will update when connected.');
+            }
+          }
+        } catch (error: any) {
         console.log('📊 Projects query result:', {
           size: snapshot.size,
           empty: snapshot.empty,
