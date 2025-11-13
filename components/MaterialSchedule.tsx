@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { BIMItem } from '@/lib/types/bim';
-import { Download, Copy, Save, FileSpreadsheet, Plus } from 'lucide-react';
+import { Download, Copy, Save, FileSpreadsheet, Plus, Trash2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 interface MaterialScheduleProps {
@@ -164,6 +164,33 @@ const MaterialSchedule: React.FC<MaterialScheduleProps> = ({ materials, isLoadin
 
     if (onMaterialsChange) {
       onMaterialsChange(updated);
+    }
+  };
+
+  // Handle deleting a row
+  const handleDeleteRow = (index: number) => {
+    const item = sortedMaterials[index];
+    const code = item?.code || 'this row';
+    
+    // Show confirmation alert
+    if (window.confirm(`Are you sure you want to delete ${code}? This action cannot be undone.`)) {
+      // Find the actual index in editedMaterials
+      const actualIndex = editedMaterials.findIndex(m => m.code === item.code);
+      
+      if (actualIndex >= 0) {
+        const updated = editedMaterials.filter((_, i) => i !== actualIndex);
+        setEditedMaterials(updated);
+        setHasUnsavedChanges(true);
+        
+        // Clear selection if the deleted row was selected
+        const newSelected = new Set(selectedRows);
+        newSelected.delete(index);
+        setSelectedRows(newSelected);
+        
+        if (onMaterialsChange) {
+          onMaterialsChange(updated);
+        }
+      }
     }
   };
 
@@ -475,7 +502,7 @@ const MaterialSchedule: React.FC<MaterialScheduleProps> = ({ materials, isLoadin
               <button
                 onClick={handleAddNewRow}
                 className="flex items-center px-3 py-2 text-sm text-white rounded-md transition-colors"
-                style={{ backgroundColor: '#42504A' }}
+                style={{ backgroundColor: '#6A7E76' }}
                 title="Add new row"
               >
                 <Plus className="w-4 h-4 mr-2" />
@@ -592,6 +619,11 @@ const MaterialSchedule: React.FC<MaterialScheduleProps> = ({ materials, isLoadin
               <th className="px-3 py-3 text-left text-sm font-medium text-white min-w-[100px]">
                 Price
               </th>
+              {!readOnly && (
+                <th className="px-3 py-3 text-left text-sm font-medium text-white w-12">
+                  Actions
+                </th>
+              )}
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
@@ -724,6 +756,20 @@ const MaterialSchedule: React.FC<MaterialScheduleProps> = ({ materials, isLoadin
                       </div>
                     )}
                   </td>
+                  {!readOnly && (
+                    <td className="px-3 py-4 text-sm">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteRow(filteredIndex);
+                        }}
+                        className="p-1 rounded transition-colors text-red-600 hover:bg-red-50"
+                        title="Delete row"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </td>
+                  )}
                 </tr>
               )
             })}
