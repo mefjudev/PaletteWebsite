@@ -134,11 +134,23 @@ export default function DashboardPage() {
         if (error?.code === 'permission-denied') {
           setError('Permission denied. Please check your Firestore security rules.');
         } else if (error?.code === 'failed-precondition') {
-          setError('Firestore index required. Check console for index creation link.');
+          const errorMsg = error?.message || '';
+          const indexLink = errorMsg.match(/https:\/\/console\.firebase\.google\.com[^\s]+/)?.[0];
+          if (indexLink) {
+            console.error('❌ Firestore index required. Create it here:', indexLink);
+            setError(`Firestore index required. Check console for the creation link.`);
+          } else {
+            setError('Firestore index required. Go to Firebase Console → Firestore → Indexes');
+          }
         } else if (error?.code === 'unavailable') {
-          console.warn('⚠️ Firestore unavailable - will retry when connection is restored');
-          // Don't show error for unavailable - it's usually temporary
+          console.error('❌ Firestore unavailable from Vercel. This suggests:');
+          console.error('1. Network connectivity issue from Vercel to Firebase');
+          console.error('2. Firestore service might be blocked');
+          console.error('3. Check Firebase Console → Firestore → Data to verify projects exist');
+          console.warn('⚠️ Will retry when connection is restored. Real-time listener should work once connected.');
+          // Don't show error for unavailable - it's usually temporary, but log details
         } else {
+          console.error('❌ Unexpected error:', error);
           setError(`Failed to load projects: ${error?.message || 'Unknown error'}`);
         }
       });
