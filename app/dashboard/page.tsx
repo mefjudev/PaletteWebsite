@@ -48,6 +48,7 @@ export default function DashboardPage() {
   const [isLoadingShared, setIsLoadingShared] = useState(false);
   const unsubscribeRef = useRef<(() => void) | null>(null);
   const unsubscribeSharedRef = useRef<(() => void) | null>(null);
+  const isSettingUpRef = useRef(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -102,25 +103,33 @@ export default function DashboardPage() {
       appId: db.app.options.appId ? `${db.app.options.appId.substring(0, 10)}...` : 'missing'
     });
     
-    // Fetch user's own projects
-    const q = query(collection(db, 'projects'), where('userId', '==', user.uid));
-    
-    // Clean up any existing listeners first
-    if (unsubscribeRef.current) {
-      console.log('🧹 Cleaning up existing projects listener...');
-      unsubscribeRef.current();
-      unsubscribeRef.current = null;
+    // Prevent concurrent setup
+    if (isSettingUpRef.current) {
+      console.log('⚠️ Already setting up listeners, skipping...');
+      return;
     }
-    if (unsubscribeSharedRef.current) {
-      console.log('🧹 Cleaning up existing shared projects listener...');
-      unsubscribeSharedRef.current();
-      unsubscribeSharedRef.current = null;
-    }
+    isSettingUpRef.current = true;
     
-    // CRITICAL: Wait for Firestore network to be enabled before doing ANY queries
-    // On Vercel, Firestore might initialize in offline mode
-    const waitForConnection = async () => {
-      // Import enableNetwork here to ensure it's available
+    // Clean up any existing listeners first and wait for cleanup to complete
+    const setupListeners = async () => {
+      // Clean up existing listeners
+      if (unsubscribeRef.current) {
+        console.log('🧹 Cleaning up existing projects listener...');
+        unsubscribeRef.current();
+        unsubscribeRef.current = null;
+      }
+      if (unsubscribeSharedRef.current) {
+        console.log('🧹 Cleaning up existing shared projects listener...');
+        unsubscribeSharedRef.current();
+        unsubscribeSharedRef.current = null;
+      }
+      
+      // CRITICAL: Wait for Firestore to fully clean up the old listeners
+      // Firestore needs time to remove the old target IDs before we can create new ones
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // CRITICAL: Wait for Firestore network to be enabled before doing ANY queries
+      // On Vercel, Firestore might initialize in offline mode
       const { enableNetwork } = await import('firebase/firestore');
       
       // Force enable network and wait for it
@@ -132,10 +141,14 @@ export default function DashboardPage() {
       } catch (error: any) {
         console.error('❌ Could not enable network:', error);
       }
+      
+      // Now set up new listeners
+      setupNewListeners();
     };
     
-    // Start by ensuring network is enabled
-    waitForConnection();
+    const setupNewListeners = () => {
+      // Fetch user's own projects
+      const q = query(collection(db, 'projects'), where('userId', '==', user.uid));
       
       // Set up real-time listener - this handles both initial load and updates
       // DO NOT call getDocs/getDocsFromServer separately - onSnapshot handles everything
@@ -217,6 +230,7 @@ export default function DashboardPage() {
 
       return () => {
         console.log('🧹 Cleaning up Firestore listeners');
+        isSettingUpRef.current = false;
         if (unsubscribeRef.current) {
           unsubscribeRef.current();
           unsubscribeRef.current = null;
@@ -226,6 +240,10 @@ export default function DashboardPage() {
           unsubscribeSharedRef.current = null;
         }
       };
+    };
+    
+    // Start the setup process
+    setupListeners();
   }, [user]);
 
   const handleLogout = async () => {
