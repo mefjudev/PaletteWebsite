@@ -590,20 +590,12 @@ export default function DashboardPage() {
           setShowShareDialog(false);
           setError(null);
           
-          // Show success message
+          // Show success message - invitation is always created, email is optional
           if (emailSent) {
             alert(`✅ Invitation sent to ${email}!\n\nThey will receive an email to create an account and access the project.`);
           } else {
-            const message = `✅ Invitation created for ${email}!\n\nThe invitation will be automatically granted when they sign up with this email.`;
-            
-            // Check if it's the Resend testing limitation
-            if (emailError && emailError.includes('only send testing emails to your own email')) {
-              alert(`${message}\n\n📧 Email Note: Resend free accounts can only send test emails to your own address. To send to others, verify a domain at resend.com/domains (or wait until production deployment).`);
-            } else if (emailError && emailError !== 'Email service not configured') {
-              alert(`${message}\n\n⚠️ Note: Email could not be sent (${emailError}), but the invitation is still active.`);
-            } else {
-              alert(`${message}\n\n💡 Tip: Add RESEND_API_KEY to your .env.local file to enable email invitations.`);
-            }
+            // Simple success message - invitation works without email
+            alert(`✅ Invitation created for ${email}!\n\nWhen they sign up with this email address, they'll automatically have access to view this project.`);
           }
         } catch (inviteError: any) {
           console.error('Error creating invitation:', inviteError);
