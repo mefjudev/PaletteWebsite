@@ -300,7 +300,6 @@ export default function DashboardPage() {
           unsubscribeShared = null;
         }
       };
-    }
   }, [user]);
 
   const handleLogout = async () => {
