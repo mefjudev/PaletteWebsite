@@ -1208,7 +1208,7 @@ export default function DashboardPage() {
                     Share Project
                   </h3>
                   <p className="text-gray-600 mb-4">
-                    Invite someone to view this project (read-only). If they don't have an account, they'll receive an email invitation to sign up.
+                    Invite someone to view this project (read-only). If they don&apos;t have an account, they&apos;ll receive an email invitation to sign up.
                   </p>
                   
                   {/* List of currently shared users */}

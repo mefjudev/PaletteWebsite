@@ -79,6 +79,7 @@ const MaterialSchedule: React.FC<MaterialScheduleProps> = ({ materials, isLoadin
       setSelectedRows(new Set());
       setHasUnsavedChanges(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [safeMaterials]);
 
   // Handle material updates
