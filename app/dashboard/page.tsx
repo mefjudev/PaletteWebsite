@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
@@ -46,6 +46,7 @@ export default function DashboardPage() {
   const [shareEmail, setShareEmail] = useState('');
   const [isSharing, setIsSharing] = useState(false);
   const [isLoadingShared, setIsLoadingShared] = useState(false);
+  const listenersSetupRef = useRef(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -105,7 +106,13 @@ export default function DashboardPage() {
     
     let unsubscribe: (() => void) | null = null;
     let unsubscribeShared: (() => void) | null = null;
-    let isSettingUp = false; // Prevent duplicate setup
+    
+    // Prevent duplicate listener setup
+    if (listenersSetupRef.current) {
+      console.log('⚠️ Listeners already set up, skipping...');
+      return;
+    }
+    listenersSetupRef.current = true;
     
     // Try to load projects with retry logic
     const loadProjects = async (retries = 3) => {
@@ -230,10 +237,7 @@ export default function DashboardPage() {
       
       // Set up real-time listener - this will sync when connection is established
       // Only set up ONE listener to avoid "already-exists" errors
-      // Check if we're already setting up to prevent duplicates
-      if (!isSettingUp) {
-        isSettingUp = true;
-        unsubscribe = onSnapshot(q, 
+      unsubscribe = onSnapshot(q, 
         (snapshot) => {
           const isFromCache = snapshot.metadata.fromCache;
           const hasPendingWrites = snapshot.metadata.hasPendingWrites;
@@ -295,7 +299,7 @@ export default function DashboardPage() {
 
       return () => {
         console.log('🧹 Cleaning up Firestore listeners');
-        isSettingUp = false;
+        listenersSetupRef.current = false;
         if (unsubscribe) {
           unsubscribe();
           unsubscribe = null;
