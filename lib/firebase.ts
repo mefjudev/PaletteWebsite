@@ -44,22 +44,39 @@ if (typeof window !== 'undefined') {
       console.log('Firestore initialized without persistent cache (Vercel)');
       
       // Force enable network connection on Vercel
-      enableNetwork(db).then(() => {
-        console.log('✅ Firestore network enabled');
-        
-        // Test connection immediately
-        setTimeout(async () => {
+      // Try multiple times to ensure we're online
+      const ensureOnline = async (attempts = 5) => {
+        try {
+          await enableNetwork(db);
+          console.log('✅ Firestore network enabled');
+          
+          // Wait a bit for connection to establish
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          // Test connection
           try {
             const testRef = doc(db, '_test', 'connection');
             await getDoc(testRef);
             console.log('✅ Firestore connection test passed');
           } catch (error: any) {
-            console.error('❌ Firestore connection test failed:', error?.code, error?.message);
+            if (error?.code === 'unavailable' && attempts > 0) {
+              console.warn(`⚠️ Connection test failed, retrying... (${attempts} attempts left)`);
+              setTimeout(() => ensureOnline(attempts - 1), 2000);
+            } else {
+              console.error('❌ Firestore connection test failed:', error?.code, error?.message);
+            }
           }
-        }, 500);
-      }).catch((error) => {
-        console.warn('⚠️ Could not enable Firestore network:', error);
-      });
+        } catch (error: any) {
+          if (attempts > 0) {
+            console.warn(`⚠️ Could not enable Firestore network, retrying... (${attempts} attempts left):`, error);
+            setTimeout(() => ensureOnline(attempts - 1), 2000);
+          } else {
+            console.error('❌ CRITICAL: Cannot enable Firestore network after multiple attempts:', error);
+          }
+        }
+      };
+      
+      ensureOnline();
     }
   } catch (error) {
     // Fallback to regular Firestore if initialization fails
