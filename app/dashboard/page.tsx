@@ -215,18 +215,34 @@ export default function DashboardPage() {
       // Fetch projects shared with this user
       const sharedQ = query(collection(db, 'projects'), where('sharedWith', 'array-contains', user.uid));
       unsubscribeSharedRef.current = onSnapshot(sharedQ, async (snapshot) => {
+        console.log('📡 Shared projects snapshot received:', {
+          size: snapshot.size,
+          empty: snapshot.empty,
+          fromCache: snapshot.metadata.fromCache
+        });
+        
         setIsLoadingShared(true);
         const shared = await Promise.all(
           snapshot.docs.map(async (doc) => {
             const data = doc.data();
+            console.log('📄 Shared project document:', { id: doc.id, name: data.name, sharedWith: data.sharedWith });
             return {
               id: doc.id,
               ...data
             } as SavedProject;
           })
         );
-        setSharedProjects(shared.sort((a, b) => b.createdAt?.seconds - a.createdAt?.seconds));
+        
+        console.log(`✅ Loaded ${shared.length} shared projects`);
+        setSharedProjects(shared.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
         setIsLoadingShared(false);
+      }, (error: any) => {
+        // Handle errors for shared projects listener
+        if (error?.code === 'already-exists' || error?.message?.includes('INTERNAL ASSERTION FAILED')) {
+          console.warn('⚠️ Shared projects listener conflict (harmless):', error?.code);
+          return;
+        }
+        console.error('Error in shared projects listener:', error);
       });
 
       return () => {
