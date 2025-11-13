@@ -249,17 +249,24 @@ export default function DashboardPage() {
             fromCache: isFromCache
           });
           
-          const projects = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          })) as SavedProject[];
+          const projects = snapshot.docs.map(doc => {
+            const data = doc.data();
+            console.log('📄 Project document:', { id: doc.id, userId: data.userId, name: data.name });
+            return {
+              id: doc.id,
+              ...data
+            } as SavedProject;
+          });
+          
+          console.log(`📊 Processing ${projects.length} projects for user ${user.uid}`);
           
           if (projects.length > 0) {
-            console.log('✅ Projects loaded:', projects.map(p => p.name), isFromCache ? '(from cache)' : '(from server)');
+            console.log('✅ Projects loaded:', projects.map(p => ({ id: p.id, name: p.name, userId: p.userId })), isFromCache ? '(from cache)' : '(from server)');
             setSavedProjects(projects.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
           } else if (!isFromCache) {
             // Only warn if we got empty result from server (not cache)
             console.warn('⚠️ Server returned 0 projects. Verify in Firebase Console that projects exist for user:', user.uid);
+            console.warn('Query details:', { collection: 'projects', where: `userId == ${user.uid}`, userUid: user.uid });
           } else {
             console.log('🔄 Waiting for server connection... (currently using cache)');
           }
@@ -309,7 +316,6 @@ export default function DashboardPage() {
           unsubscribeShared = null;
         }
       };
-    }
   }, [user]);
 
   const handleLogout = async () => {
@@ -406,7 +412,18 @@ export default function DashboardPage() {
       };
       
       const docRef = await addDoc(collection(db, 'projects'), projectData);
-      console.log('Project saved successfully with ID:', docRef.id);
+      console.log('✅ Project saved successfully with ID:', docRef.id);
+      console.log('📝 Saved project data:', {
+        id: docRef.id,
+        name: projectName,
+        userId: user.uid,
+        materialsCount: materials.length,
+        createdAt: new Date().toISOString()
+      });
+      
+      // Force refresh the projects list by resetting the listener
+      // The real-time listener should pick this up, but let's also manually trigger a refresh
+      console.log('🔄 Project saved - real-time listener should update automatically');
       
       setProjectName('');
       setShowSaveDialog(false);
