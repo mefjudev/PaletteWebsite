@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
-import { collection, addDoc, query, where, getDocs, onSnapshot, doc, deleteDoc, updateDoc, getDoc, setDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
+import { collection, addDoc, query, where, getDocs, onSnapshot, doc, deleteDoc, updateDoc, getDoc, setDoc, arrayUnion, arrayRemove, serverTimestamp } from 'firebase/firestore';
 import ImageUpload from '@/components/ImageUpload';
 import MaterialSchedule from '@/components/MaterialSchedule';
 import { BIMItem } from '@/lib/types/bim';
@@ -91,7 +91,30 @@ export default function DashboardPage() {
       console.log('Setting up project listener for user:', user.uid);
       
       // Fetch user's own projects
+      // Use getDocs first to force server fetch, then set up real-time listener
       const q = query(collection(db, 'projects'), where('userId', '==', user.uid));
+      
+      // Force initial server fetch to bypass cache
+      getDocs(q).then((snapshot) => {
+        console.log('Initial server fetch:', {
+          size: snapshot.size,
+          empty: snapshot.empty,
+          fromCache: snapshot.metadata.fromCache
+        });
+        
+        if (snapshot.size > 0) {
+          const projects = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          })) as SavedProject[];
+          console.log('Initial projects loaded from server:', projects.map(p => p.name));
+          setSavedProjects(projects.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
+        }
+      }).catch((error) => {
+        console.error('Error in initial server fetch:', error);
+      });
+      
+      // Set up real-time listener
       const unsubscribe = onSnapshot(q, 
         (snapshot) => {
           console.log('Projects snapshot received:', {
