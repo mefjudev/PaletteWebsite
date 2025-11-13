@@ -1024,7 +1024,7 @@ export default function DashboardPage() {
 
         {/* Shared Projects Section */}
         {sharedProjects.length > 0 && (
-          <div className="w-full max-w-xs mt-8 px-4">
+          <div className="w-full max-w-xs mt-12 px-4">
             <h3 className="text-lg font-semibold text-white mb-4 flex items-center">
               <Users className="w-5 h-5 mr-2" />
               Shared With Me
@@ -1048,7 +1048,7 @@ export default function DashboardPage() {
         {/* Logout Button */}
         <button
           onClick={handleLogout}
-          className="mt-auto mb-2 py-2 px-6 text-white rounded-lg transition-opacity hover:opacity-80"
+          className="mt-16 mb-2 py-2 px-6 text-white rounded-lg transition-opacity hover:opacity-80"
           style={{ backgroundColor: '#6A7E76' }}
         >
           Logout
