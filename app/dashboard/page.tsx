@@ -203,11 +203,15 @@ export default function DashboardPage() {
   };
 
   const handleSaveProject = async () => {
+    console.log('handleSaveProject called!', { projectName, hasUser: !!user, materialsCount: materials.length });
+    
     if (!projectName.trim() || !user) {
+      console.warn('Validation failed:', { projectName: projectName.trim(), hasUser: !!user });
       setError('Please enter a project name');
       return;
     }
     
+    console.log('Starting save process...');
     setIsSaving(true);
     setError(null);
     
