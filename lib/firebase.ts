@@ -22,14 +22,27 @@ if (!getApps().length) {
 // Initialize Firebase Auth
 export const auth: Auth = getAuth(app);
 
-// Initialize Firestore with persistent cache (helps with network issues)
+// Initialize Firestore
+// Temporarily disable persistent cache to debug connectivity issues
+// TODO: Re-enable cache once connectivity is stable
 let db: Firestore;
 if (typeof window !== 'undefined') {
-  // Browser: use persistent cache
+  // Browser: try persistent cache, fallback to default if it fails
   try {
-    db = initializeFirestore(app, {
-      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
-    });
+    // Check if we're on Vercel (might have cache issues)
+    const isVercel = typeof window !== 'undefined' && window.location.hostname.includes('vercel.app');
+    
+    if (!isVercel) {
+      // Use persistent cache on localhost
+      db = initializeFirestore(app, {
+        localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+      });
+      console.log('Firestore initialized with persistent cache');
+    } else {
+      // On Vercel, use default Firestore (no persistent cache) to avoid connectivity issues
+      db = getFirestore(app);
+      console.log('Firestore initialized without persistent cache (Vercel)');
+    }
   } catch (error) {
     // Fallback to regular Firestore if initialization fails
     console.warn('Failed to initialize Firestore with cache, using default:', error);
