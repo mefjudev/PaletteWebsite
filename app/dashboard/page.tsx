@@ -93,66 +93,52 @@ export default function DashboardPage() {
       // Fetch user's own projects
       const q = query(collection(db, 'projects'), where('userId', '==', user.uid));
       
-      // Try server fetch first, fallback to cache if unavailable
-      getDocsFromServer(q).then((snapshot) => {
-        console.log('✅ Initial server fetch (forced from server):', {
+      // Use regular getDocs which handles server/cache automatically
+      // This is more reliable than forcing server fetch
+      getDocs(q).then((snapshot) => {
+        console.log('📊 Projects query result:', {
           size: snapshot.size,
           empty: snapshot.empty,
-          fromCache: snapshot.metadata.fromCache
+          fromCache: snapshot.metadata.fromCache,
+          hasPendingWrites: snapshot.metadata.hasPendingWrites
         });
         
-        if (snapshot.size > 0) {
-          const projects = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          })) as SavedProject[];
-          console.log('✅ Initial projects loaded from server:', projects.map(p => p.name));
+        const projects = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as SavedProject[];
+        
+        if (projects.length > 0) {
+          console.log('✅ Projects loaded:', projects.map(p => p.name));
           setSavedProjects(projects.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
         } else {
-          console.warn('⚠️ Server returned 0 projects. Checking Firestore rules and query...');
-          console.log('Query details:', {
+          console.warn('⚠️ No projects found. Query details:', {
             collection: 'projects',
             whereClause: `userId == ${user.uid}`,
-            userUid: user.uid
+            userUid: user.uid,
+            fromCache: snapshot.metadata.fromCache
           });
+          
+          // If from cache and empty, it might be stale - try to force refresh
+          if (snapshot.metadata.fromCache) {
+            console.log('🔄 Cache returned empty, this might be stale. Real-time listener will update when connected.');
+          }
         }
       }).catch((error: any) => {
-        console.warn('⚠️ Server fetch failed, trying cache as fallback:', error?.code);
+        console.error('❌ Error loading projects:', {
+          code: error?.code,
+          message: error?.message,
+          name: error?.name
+        });
         
-        // If server is unavailable, try cache as fallback
-        if (error?.code === 'unavailable') {
-          getDocsFromCache(q).then((snapshot) => {
-            console.log('📦 Cache fallback result:', {
-              size: snapshot.size,
-              fromCache: snapshot.metadata.fromCache
-            });
-            
-            if (snapshot.size > 0) {
-              const projects = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-              })) as SavedProject[];
-              console.log('📦 Projects loaded from cache:', projects.map(p => p.name));
-              setSavedProjects(projects.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
-            } else {
-              console.error('❌ Both server and cache returned 0 projects. This suggests:');
-              console.error('1. Firestore rules may be blocking the query');
-              console.error('2. Network connectivity issue');
-              console.error('3. Projects may not exist for this user ID');
-              setError('Unable to load projects. Check console for details.');
-            }
-          }).catch((cacheError: any) => {
-            console.error('❌ Cache fallback also failed:', cacheError);
-            if (error?.code === 'permission-denied' || cacheError?.code === 'permission-denied') {
-              setError('Permission denied. Please check your Firestore security rules.');
-            } else {
-              setError('Unable to connect to Firestore. Please check your network connection.');
-            }
-          });
-        } else if (error?.code === 'permission-denied') {
+        if (error?.code === 'permission-denied') {
           setError('Permission denied. Please check your Firestore security rules.');
+        } else if (error?.code === 'failed-precondition') {
+          setError('Firestore index required. Check console for index creation link.');
+        } else if (error?.code === 'unavailable') {
+          console.warn('⚠️ Firestore unavailable - will retry when connection is restored');
+          // Don't show error for unavailable - it's usually temporary
         } else {
-          console.error('❌ Unexpected error:', error);
           setError(`Failed to load projects: ${error?.message || 'Unknown error'}`);
         }
       });
