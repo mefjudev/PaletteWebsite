@@ -87,43 +87,47 @@ export default function DashboardPage() {
   }, [router]);
 
   useEffect(() => {
-    if (user) {
-      console.log('Setting up project listener for user:', user.uid);
-      console.log('Firestore instance:', db.app.name, 'Project ID:', db.app.options.projectId);
+    if (!user) return;
+    
+    console.log('Setting up project listener for user:', user.uid);
+    console.log('Firestore instance:', db.app.name, 'Project ID:', db.app.options.projectId);
+    
+    // Log Firebase config to verify it's correct (without sensitive data)
+    console.log('🔍 Firebase Config Check:', {
+      projectId: db.app.options.projectId,
+      authDomain: db.app.options.authDomain,
+      apiKey: db.app.options.apiKey ? `${db.app.options.apiKey.substring(0, 10)}...` : 'missing',
+      appId: db.app.options.appId ? `${db.app.options.appId.substring(0, 10)}...` : 'missing'
+    });
+    
+    // Fetch user's own projects
+    const q = query(collection(db, 'projects'), where('userId', '==', user.uid));
+    
+    let unsubscribe: (() => void) | null = null;
+    let unsubscribeShared: (() => void) | null = null;
+    
+    // CRITICAL: Wait for Firestore network to be enabled before doing ANY queries
+    // On Vercel, Firestore might initialize in offline mode
+    const waitForConnection = async () => {
+      // Import enableNetwork here to ensure it's available
+      const { enableNetwork } = await import('firebase/firestore');
       
-      // CRITICAL: Wait for Firestore network to be enabled before doing ANY queries
-      // On Vercel, Firestore might initialize in offline mode
-      const waitForConnection = async () => {
-        // Import enableNetwork here to ensure it's available
-        const { enableNetwork } = await import('firebase/firestore');
-        
-        // Log Firebase config to verify it's correct (without sensitive data)
-        console.log('🔍 Firebase Config Check:', {
-          projectId: db.app.options.projectId,
-          authDomain: db.app.options.authDomain,
-          apiKey: db.app.options.apiKey ? `${db.app.options.apiKey.substring(0, 10)}...` : 'missing',
-          appId: db.app.options.appId ? `${db.app.options.appId.substring(0, 10)}...` : 'missing'
-        });
-        
-        // Force enable network and wait for it
-        try {
-          await enableNetwork(db);
-          console.log('✅ Firestore network explicitly enabled');
-          // Give it more time to establish connection
-          await new Promise(resolve => setTimeout(resolve, 3000));
-        } catch (error: any) {
-          console.error('❌ Could not enable network:', error);
-        }
-        
-        // Now proceed with queries
-        loadProjects();
-      };
+      // Force enable network and wait for it
+      try {
+        await enableNetwork(db);
+        console.log('✅ Firestore network explicitly enabled');
+        // Give it time to establish connection
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      } catch (error: any) {
+        console.error('❌ Could not enable network:', error);
+      }
       
-      // Fetch user's own projects
-      const q = query(collection(db, 'projects'), where('userId', '==', user.uid));
-      
-      // Try to load projects with retry logic
-      const loadProjects = async (retries = 3) => {
+      // Now proceed with queries
+      loadProjects();
+    };
+    
+    // Try to load projects with retry logic
+    const loadProjects = async (retries = 3) => {
         try {
           
           // Try server fetch FIRST on Vercel (skip cache entirely)
@@ -224,7 +228,8 @@ export default function DashboardPage() {
       waitForConnection();
       
       // Set up real-time listener - this will sync when connection is established
-      const unsubscribe = onSnapshot(q, 
+      // Only set up ONE listener to avoid "already-exists" errors
+      unsubscribe = onSnapshot(q, 
         (snapshot) => {
           const isFromCache = snapshot.metadata.fromCache;
           const hasPendingWrites = snapshot.metadata.hasPendingWrites;
@@ -269,7 +274,7 @@ export default function DashboardPage() {
 
       // Fetch projects shared with this user
       const sharedQ = query(collection(db, 'projects'), where('sharedWith', 'array-contains', user.uid));
-      const unsubscribeShared = onSnapshot(sharedQ, async (snapshot) => {
+      unsubscribeShared = onSnapshot(sharedQ, async (snapshot) => {
         setIsLoadingShared(true);
         const shared = await Promise.all(
           snapshot.docs.map(async (doc) => {
