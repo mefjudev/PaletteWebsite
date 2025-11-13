@@ -203,24 +203,41 @@ export default function DashboardPage() {
   };
 
   const handleSaveProject = async () => {
-    if (!projectName.trim() || !user) return;
+    if (!projectName.trim() || !user) {
+      setError('Please enter a project name');
+      return;
+    }
     
     setIsSaving(true);
+    setError(null);
+    
     try {
-      await addDoc(collection(db, 'projects'), {
+      console.log('Saving project:', projectName.trim(), 'for user:', user.uid, 'with', materials.length, 'materials');
+      
+      const projectData = {
         name: projectName.trim(),
         materials: materials,
         userId: user.uid,
         createdAt: new Date(),
         sharedWith: [],
         sharedWithEmails: []
-      });
+      };
+      
+      const docRef = await addDoc(collection(db, 'projects'), projectData);
+      console.log('Project saved successfully with ID:', docRef.id);
+      
       setProjectName('');
       setShowSaveDialog(false);
       setCurrentProjectId(null);
-    } catch (error) {
+      setError(null);
+    } catch (error: any) {
       console.error('Error saving project:', error);
-      setError('Failed to save project');
+      const errorMessage = error?.code === 'permission-denied' 
+        ? 'Permission denied. Please check your Firestore rules.'
+        : error?.code === 'unavailable'
+        ? 'Network error. Please check your connection and try again.'
+        : error?.message || 'Failed to save project. Please try again.';
+      setError(errorMessage);
     } finally {
       setIsSaving(false);
     }
