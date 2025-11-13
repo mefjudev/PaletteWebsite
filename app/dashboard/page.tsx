@@ -1155,7 +1155,11 @@ export default function DashboardPage() {
                       Cancel
                     </button>
                     <button
-                      onClick={handleSaveProject}
+                      onClick={(e) => {
+                        console.log('Save button clicked!', { projectName, isSaving, hasUser: !!user, materialsCount: materials.length });
+                        e.preventDefault();
+                        handleSaveProject();
+                      }}
                       disabled={!projectName.trim() || isSaving}
                       className="px-6 py-3 text-white rounded-lg transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
                       style={{ backgroundColor: '#42504A' }}
