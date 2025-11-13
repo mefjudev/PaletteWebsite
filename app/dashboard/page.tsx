@@ -55,22 +55,33 @@ export default function DashboardPage() {
         setUser(currentUser);
         
         // Ensure user record exists in Firestore for sharing functionality
-        try {
-          const userDocRef = doc(db, 'users', currentUser.uid);
-          const userDoc = await getDoc(userDocRef);
-          
-          if (!userDoc.exists()) {
-            // Create user record if it doesn't exist
-            await setDoc(userDocRef, {
-              email: currentUser.email?.toLowerCase() || '',
-              uid: currentUser.uid,
-              createdAt: new Date()
-            });
+        // Retry logic for network issues
+        const ensureUserRecord = async (retries = 3) => {
+          try {
+            const userDocRef = doc(db, 'users', currentUser.uid);
+            const userDoc = await getDoc(userDocRef);
+            
+            if (!userDoc.exists()) {
+              // Create user record if it doesn't exist
+              await setDoc(userDocRef, {
+                email: currentUser.email?.toLowerCase() || '',
+                uid: currentUser.uid,
+                createdAt: new Date()
+              });
+            }
+          } catch (error: any) {
+            // If it's a network error and we have retries left, try again
+            if ((error?.code === 'unavailable' || error?.code === 'deadline-exceeded') && retries > 0) {
+              console.warn(`Retrying user record creation (${retries} retries left)...`);
+              setTimeout(() => ensureUserRecord(retries - 1), 1000);
+            } else {
+              console.warn('Could not ensure user record exists (non-critical):', error?.code || error?.message);
+              // Continue even if user record creation fails - not critical for app functionality
+            }
           }
-        } catch (error) {
-          console.error('Error ensuring user record exists:', error);
-          // Continue even if user record creation fails
-        }
+        };
+        
+        ensureUserRecord();
       }
     });
 
@@ -87,10 +98,16 @@ export default function DashboardPage() {
           ...doc.data()
         })) as SavedProject[];
         console.log('Loaded projects:', projects.length, 'for user:', user.uid);
+        if (projects.length > 0) {
+          console.log('Project names:', projects.map(p => p.name));
+        }
         setSavedProjects(projects.sort((a, b) => b.createdAt?.seconds - a.createdAt?.seconds));
-      }, (error) => {
+      }, (error: any) => {
         console.error('Error loading projects:', error);
-        setError('Failed to load projects. Check browser console for details.');
+        // Don't show error for network issues - they're usually temporary
+        if (error?.code !== 'unavailable' && error?.code !== 'deadline-exceeded') {
+          setError('Failed to load projects. Check browser console for details.');
+        }
       });
 
       // Fetch projects shared with this user
