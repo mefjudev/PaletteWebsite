@@ -290,8 +290,15 @@ export default function DashboardPage() {
       });
 
       return () => {
-        unsubscribe();
-        unsubscribeShared();
+        console.log('🧹 Cleaning up Firestore listeners');
+        if (unsubscribe) {
+          unsubscribe();
+          unsubscribe = null;
+        }
+        if (unsubscribeShared) {
+          unsubscribeShared();
+          unsubscribeShared = null;
+        }
       };
     }
   }, [user]);
