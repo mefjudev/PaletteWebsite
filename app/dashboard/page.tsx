@@ -91,32 +91,32 @@ export default function DashboardPage() {
       console.log('Setting up project listener for user:', user.uid);
       console.log('Firestore instance:', db.app.name, 'Project ID:', db.app.options.projectId);
       
+      // CRITICAL: Wait for Firestore network to be enabled before doing ANY queries
+      // On Vercel, Firestore might initialize in offline mode
+      const waitForConnection = async () => {
+        // Import enableNetwork here to ensure it's available
+        const { enableNetwork } = await import('firebase/firestore');
+        
+        // Force enable network and wait for it
+        try {
+          await enableNetwork(db);
+          console.log('✅ Firestore network explicitly enabled');
+          // Give it a moment to establish connection
+          await new Promise(resolve => setTimeout(resolve, 1500));
+        } catch (error: any) {
+          console.error('❌ Could not enable network:', error);
+        }
+        
+        // Now proceed with queries
+        loadProjects();
+      };
+      
       // Fetch user's own projects
       const q = query(collection(db, 'projects'), where('userId', '==', user.uid));
       
       // Try to load projects with retry logic
       const loadProjects = async (retries = 3) => {
         try {
-          // First, test if we can reach Firestore at all by trying to read a document
-          // This helps diagnose if it's a query issue or a general connectivity issue
-          try {
-            const testDocRef = doc(db, 'projects', 'test-connection');
-            await getDoc(testDocRef);
-            console.log('✅ Can reach Firestore (test document read)');
-          } catch (testError: any) {
-            if (testError?.code === 'unavailable') {
-              console.error('❌ CRITICAL: Cannot reach Firestore servers at all. This is a network connectivity issue.');
-              console.error('Possible causes:');
-              console.error('1. Firestore service not enabled in Firebase Console');
-              console.error('2. Network/firewall blocking Firestore endpoints');
-              console.error('3. Firestore database location issue');
-              if (retries > 0) {
-                console.warn(`Retrying in 3s... (${retries} retries left)`);
-                setTimeout(() => loadProjects(retries - 1), 3000);
-                return;
-              }
-            }
-          }
           
           // First try: regular getDocs (uses cache if available, server if connected)
           let snapshot = await getDocs(q);
@@ -201,8 +201,8 @@ export default function DashboardPage() {
         }
       };
       
-      // Start loading after a short delay to let Firestore initialize
-      setTimeout(() => loadProjects(), 1000);
+      // Start by ensuring network is enabled, then load projects
+      waitForConnection();
       
       // Set up real-time listener - this will sync when connection is established
       const unsubscribe = onSnapshot(q, 
