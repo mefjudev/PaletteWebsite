@@ -46,7 +46,8 @@ export default function DashboardPage() {
   const [shareEmail, setShareEmail] = useState('');
   const [isSharing, setIsSharing] = useState(false);
   const [isLoadingShared, setIsLoadingShared] = useState(false);
-  const listenersSetupRef = useRef(false);
+  const unsubscribeRef = useRef<(() => void) | null>(null);
+  const unsubscribeSharedRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -104,15 +105,17 @@ export default function DashboardPage() {
     // Fetch user's own projects
     const q = query(collection(db, 'projects'), where('userId', '==', user.uid));
     
-    let unsubscribe: (() => void) | null = null;
-    let unsubscribeShared: (() => void) | null = null;
-    
-    // Prevent duplicate listener setup
-    if (listenersSetupRef.current) {
-      console.log('⚠️ Listeners already set up, skipping...');
-      return;
+    // Clean up any existing listeners first
+    if (unsubscribeRef.current) {
+      console.log('🧹 Cleaning up existing projects listener...');
+      unsubscribeRef.current();
+      unsubscribeRef.current = null;
     }
-    listenersSetupRef.current = true;
+    if (unsubscribeSharedRef.current) {
+      console.log('🧹 Cleaning up existing shared projects listener...');
+      unsubscribeSharedRef.current();
+      unsubscribeSharedRef.current = null;
+    }
     
     // CRITICAL: Wait for Firestore network to be enabled before doing ANY queries
     // On Vercel, Firestore might initialize in offline mode
@@ -137,7 +140,7 @@ export default function DashboardPage() {
       // Set up real-time listener - this handles both initial load and updates
       // DO NOT call getDocs/getDocsFromServer separately - onSnapshot handles everything
       // This prevents "INTERNAL ASSERTION FAILED" errors from conflicting queries
-      unsubscribe = onSnapshot(q, 
+      unsubscribeRef.current = onSnapshot(q, 
         (snapshot) => {
           const isFromCache = snapshot.metadata.fromCache;
           const hasPendingWrites = snapshot.metadata.hasPendingWrites;
@@ -195,9 +198,9 @@ export default function DashboardPage() {
         }
       );
         
-        // Fetch projects shared with this user
-        const sharedQ = query(collection(db, 'projects'), where('sharedWith', 'array-contains', user.uid));
-        unsubscribeShared = onSnapshot(sharedQ, async (snapshot) => {
+      // Fetch projects shared with this user
+      const sharedQ = query(collection(db, 'projects'), where('sharedWith', 'array-contains', user.uid));
+      unsubscribeSharedRef.current = onSnapshot(sharedQ, async (snapshot) => {
         setIsLoadingShared(true);
         const shared = await Promise.all(
           snapshot.docs.map(async (doc) => {
@@ -214,14 +217,13 @@ export default function DashboardPage() {
 
       return () => {
         console.log('🧹 Cleaning up Firestore listeners');
-        listenersSetupRef.current = false;
-        if (unsubscribe) {
-          unsubscribe();
-          unsubscribe = null;
+        if (unsubscribeRef.current) {
+          unsubscribeRef.current();
+          unsubscribeRef.current = null;
         }
-        if (unsubscribeShared) {
-          unsubscribeShared();
-          unsubscribeShared = null;
+        if (unsubscribeSharedRef.current) {
+          unsubscribeSharedRef.current();
+          unsubscribeSharedRef.current = null;
         }
       };
   }, [user]);
