@@ -97,12 +97,20 @@ export default function DashboardPage() {
         // Import enableNetwork here to ensure it's available
         const { enableNetwork } = await import('firebase/firestore');
         
+        // Log Firebase config to verify it's correct (without sensitive data)
+        console.log('🔍 Firebase Config Check:', {
+          projectId: db.app.options.projectId,
+          authDomain: db.app.options.authDomain,
+          apiKey: db.app.options.apiKey ? `${db.app.options.apiKey.substring(0, 10)}...` : 'missing',
+          appId: db.app.options.appId ? `${db.app.options.appId.substring(0, 10)}...` : 'missing'
+        });
+        
         // Force enable network and wait for it
         try {
           await enableNetwork(db);
           console.log('✅ Firestore network explicitly enabled');
-          // Give it a moment to establish connection
-          await new Promise(resolve => setTimeout(resolve, 1500));
+          // Give it more time to establish connection
+          await new Promise(resolve => setTimeout(resolve, 3000));
         } catch (error: any) {
           console.error('❌ Could not enable network:', error);
         }
@@ -118,25 +126,36 @@ export default function DashboardPage() {
       const loadProjects = async (retries = 3) => {
         try {
           
-          // First try: regular getDocs (uses cache if available, server if connected)
-          let snapshot = await getDocs(q);
-          
-          // If we got cache and it's empty, try forcing server fetch
-          if (snapshot.metadata.fromCache && snapshot.empty && retries > 0) {
-            console.log('🔄 Cache is empty, attempting server fetch...');
-            try {
-              snapshot = await getDocsFromServer(q);
-              console.log('✅ Server fetch successful');
-            } catch (serverError: any) {
-              if (serverError?.code === 'unavailable') {
-                console.warn('⚠️ Server unavailable, will retry...');
-                if (retries > 0) {
-                  setTimeout(() => loadProjects(retries - 1), 2000);
-                  return;
-                }
+          // Try server fetch FIRST on Vercel (skip cache entirely)
+          let snapshot;
+          try {
+            console.log('🔄 Attempting direct server fetch (bypassing cache)...');
+            snapshot = await getDocsFromServer(q);
+            console.log('✅ Server fetch successful');
+          } catch (serverError: any) {
+            if (serverError?.code === 'unavailable') {
+              console.error('❌ CRITICAL: Cannot reach Firestore servers from Vercel');
+              console.error('This suggests:');
+              console.error('1. Firestore endpoints may be blocked by Vercel network policies');
+              console.error('2. Environment variables may be incorrect (check projectId)');
+              console.error('3. Firestore database may not be in the expected region');
+              console.error('Error details:', {
+                code: serverError?.code,
+                message: serverError?.message,
+                stack: serverError?.stack?.substring(0, 200)
+              });
+              
+              if (retries > 0) {
+                console.warn(`⚠️ Retrying in 3s... (${retries} retries left)`);
+                setTimeout(() => loadProjects(retries - 1), 3000);
+                return;
               } else {
-                throw serverError;
+                // Fallback to regular getDocs as last resort
+                console.warn('⚠️ Falling back to regular getDocs (may use cache)...');
+                snapshot = await getDocs(q);
               }
+            } else {
+              throw serverError;
             }
           }
           
