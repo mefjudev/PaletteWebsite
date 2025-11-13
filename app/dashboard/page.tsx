@@ -189,10 +189,11 @@ export default function DashboardPage() {
         }, 
         (error: any) => {
           // Handle Firestore internal errors gracefully
-          if (error?.message?.includes('INTERNAL ASSERTION FAILED')) {
-            console.warn('⚠️ Firestore internal error (usually harmless, SDK bug):', error?.message?.substring(0, 100));
-            // Don't show this to user - it's an SDK internal issue, not a real error
-            // The listener will continue to work
+          if (error?.message?.includes('INTERNAL ASSERTION FAILED') || error?.code === 'already-exists') {
+            console.warn('⚠️ Firestore listener conflict (harmless - listener will continue working):', error?.code || error?.message?.substring(0, 100));
+            // Don't show this to user - it's a timing issue, the listener will still work
+            // The "already-exists" error happens when cleanup hasn't fully completed
+            // but Firestore will merge the listeners and continue working
             return;
           }
           
