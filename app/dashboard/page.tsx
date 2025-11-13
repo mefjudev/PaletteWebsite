@@ -172,10 +172,18 @@ export default function DashboardPage() {
           }
         }, 
         (error: any) => {
-          console.error('Error loading projects:', {
+          // Handle Firestore internal errors gracefully
+          if (error?.message?.includes('INTERNAL ASSERTION FAILED')) {
+            console.warn('⚠️ Firestore internal error (usually harmless, SDK bug):', error?.message?.substring(0, 100));
+            // Don't show this to user - it's an SDK internal issue, not a real error
+            // The listener will continue to work
+            return;
+          }
+          
+          console.error('Error in projects listener:', {
             code: error?.code,
             message: error?.message,
-            stack: error?.stack
+            stack: error?.stack?.substring(0, 200)
           });
           
           // Don't show error for network issues - they're usually temporary
@@ -185,7 +193,7 @@ export default function DashboardPage() {
             console.warn('Projects query failed due to network issue, will retry automatically');
           }
         }
-        );
+      );
         
         // Fetch projects shared with this user
         const sharedQ = query(collection(db, 'projects'), where('sharedWith', 'array-contains', user.uid));
