@@ -105,6 +105,7 @@ export default function DashboardPage() {
     
     let unsubscribe: (() => void) | null = null;
     let unsubscribeShared: (() => void) | null = null;
+    let isSettingUp = false; // Prevent duplicate setup
     
     // Try to load projects with retry logic
     const loadProjects = async (retries = 3) => {
@@ -229,7 +230,10 @@ export default function DashboardPage() {
       
       // Set up real-time listener - this will sync when connection is established
       // Only set up ONE listener to avoid "already-exists" errors
-      unsubscribe = onSnapshot(q, 
+      // Check if we're already setting up to prevent duplicates
+      if (!isSettingUp) {
+        isSettingUp = true;
+        unsubscribe = onSnapshot(q, 
         (snapshot) => {
           const isFromCache = snapshot.metadata.fromCache;
           const hasPendingWrites = snapshot.metadata.hasPendingWrites;
@@ -270,11 +274,11 @@ export default function DashboardPage() {
             console.warn('Projects query failed due to network issue, will retry automatically');
           }
         }
-      );
-
-      // Fetch projects shared with this user
-      const sharedQ = query(collection(db, 'projects'), where('sharedWith', 'array-contains', user.uid));
-      unsubscribeShared = onSnapshot(sharedQ, async (snapshot) => {
+        );
+        
+        // Fetch projects shared with this user
+        const sharedQ = query(collection(db, 'projects'), where('sharedWith', 'array-contains', user.uid));
+        unsubscribeShared = onSnapshot(sharedQ, async (snapshot) => {
         setIsLoadingShared(true);
         const shared = await Promise.all(
           snapshot.docs.map(async (doc) => {
@@ -291,6 +295,7 @@ export default function DashboardPage() {
 
       return () => {
         console.log('🧹 Cleaning up Firestore listeners');
+        isSettingUp = false;
         if (unsubscribe) {
           unsubscribe();
           unsubscribe = null;
@@ -300,6 +305,7 @@ export default function DashboardPage() {
           unsubscribeShared = null;
         }
       };
+    }
   }, [user]);
 
   const handleLogout = async () => {
