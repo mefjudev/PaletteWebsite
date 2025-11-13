@@ -63,19 +63,20 @@ export default function DashboardPage() {
           try {
             const userDocRef = doc(db, 'users', currentUser.uid);
             // Use setDoc with merge - it will create if doesn't exist, update if it does
+            // Use serverTimestamp() instead of new Date() to avoid invalid-argument errors
             await setDoc(userDocRef, {
               email: currentUser.email?.toLowerCase() || '',
               uid: currentUser.uid,
-              createdAt: new Date()
+              createdAt: serverTimestamp()
             }, { merge: true });
-            console.log('User record ensured successfully');
+            console.log('✅ User record ensured successfully');
           } catch (error: any) {
             // If it's a network error and we have retries left, try again
             if ((error?.code === 'unavailable' || error?.code === 'deadline-exceeded') && retries > 0) {
-              console.warn(`Retrying user record creation (${retries} retries left)...`);
+              console.warn(`⚠️ Retrying user record creation (${retries} retries left)...`);
               setTimeout(() => ensureUserRecord(retries - 1), 2000);
             } else {
-              console.warn('Could not ensure user record exists (non-critical):', error?.code || error?.message);
+              console.warn('⚠️ Could not ensure user record exists (non-critical):', error?.code || error?.message);
               // Continue even if user record creation fails - not critical for app functionality
             }
           }
