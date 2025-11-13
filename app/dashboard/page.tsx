@@ -88,25 +88,48 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (user) {
+      console.log('Setting up project listener for user:', user.uid);
+      
       // Fetch user's own projects
       const q = query(collection(db, 'projects'), where('userId', '==', user.uid));
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        const projects = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as SavedProject[];
-        console.log('Loaded projects:', projects.length, 'for user:', user.uid);
-        if (projects.length > 0) {
-          console.log('Project names:', projects.map(p => p.name));
+      const unsubscribe = onSnapshot(q, 
+        (snapshot) => {
+          console.log('Projects snapshot received:', {
+            size: snapshot.size,
+            empty: snapshot.empty,
+            hasPendingWrites: snapshot.metadata.hasPendingWrites,
+            fromCache: snapshot.metadata.fromCache
+          });
+          
+          const projects = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          })) as SavedProject[];
+          
+          console.log('Loaded projects:', projects.length, 'for user:', user.uid);
+          if (projects.length > 0) {
+            console.log('Project names:', projects.map(p => p.name));
+          } else {
+            console.warn('No projects found. Check Firestore console to verify projects exist for this user ID.');
+          }
+          
+          setSavedProjects(projects.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
+        }, 
+        (error: any) => {
+          console.error('Error loading projects:', {
+            code: error?.code,
+            message: error?.message,
+            stack: error?.stack
+          });
+          
+          // Don't show error for network issues - they're usually temporary
+          if (error?.code !== 'unavailable' && error?.code !== 'deadline-exceeded') {
+            setError(`Failed to load projects: ${error?.message || 'Unknown error'}`);
+          } else {
+            console.warn('Projects query failed due to network issue, will retry automatically');
+          }
         }
-        setSavedProjects(projects.sort((a, b) => b.createdAt?.seconds - a.createdAt?.seconds));
-      }, (error: any) => {
-        console.error('Error loading projects:', error);
-        // Don't show error for network issues - they're usually temporary
-        if (error?.code !== 'unavailable' && error?.code !== 'deadline-exceeded') {
-          setError('Failed to load projects. Check browser console for details.');
-        }
-      });
+      );
 
       // Fetch projects shared with this user
       const sharedQ = query(collection(db, 'projects'), where('sharedWith', 'array-contains', user.uid));
