@@ -94,14 +94,31 @@ export default function DashboardPage() {
       // Fetch user's own projects
       const q = query(collection(db, 'projects'), where('userId', '==', user.uid));
       
-      // Wait a bit for Firestore to establish connection, then try query
-      // The real-time listener will handle updates once connected
-      const loadProjects = async () => {
+      // Try to load projects with retry logic
+      const loadProjects = async (retries = 3) => {
         try {
-          // Small delay to let Firestore initialize
-          await new Promise(resolve => setTimeout(resolve, 500));
+          // First try: regular getDocs (uses cache if available, server if connected)
+          let snapshot = await getDocs(q);
           
-          const snapshot = await getDocs(q);
+          // If we got cache and it's empty, try forcing server fetch
+          if (snapshot.metadata.fromCache && snapshot.empty && retries > 0) {
+            console.log('🔄 Cache is empty, attempting server fetch...');
+            try {
+              snapshot = await getDocsFromServer(q);
+              console.log('✅ Server fetch successful');
+            } catch (serverError: any) {
+              if (serverError?.code === 'unavailable') {
+                console.warn('⚠️ Server unavailable, will retry...');
+                if (retries > 0) {
+                  setTimeout(() => loadProjects(retries - 1), 2000);
+                  return;
+                }
+              } else {
+                throw serverError;
+              }
+            }
+          }
+          
           console.log('📊 Projects query result:', {
             size: snapshot.size,
             empty: snapshot.empty,
@@ -134,7 +151,8 @@ export default function DashboardPage() {
           console.error('❌ Error loading projects:', {
             code: error?.code,
             message: error?.message,
-            name: error?.name
+            name: error?.name,
+            retriesLeft: retries
           });
           
           if (error?.code === 'permission-denied') {
@@ -149,8 +167,12 @@ export default function DashboardPage() {
               setError('Firestore index required. Go to Firebase Console → Firestore → Indexes');
             }
           } else if (error?.code === 'unavailable') {
-            console.warn('⚠️ Firestore temporarily unavailable. Real-time listener will sync when connection is restored.');
-            // Don't show error - real-time listener will handle it
+            if (retries > 0) {
+              console.warn(`⚠️ Firestore unavailable, retrying in 2s... (${retries} retries left)`);
+              setTimeout(() => loadProjects(retries - 1), 2000);
+            } else {
+              console.warn('⚠️ Firestore unavailable after retries. Real-time listener will sync when connection is restored.');
+            }
           } else {
             console.error('❌ Unexpected error:', error);
             setError(`Failed to load projects: ${error?.message || 'Unknown error'}`);
@@ -158,7 +180,8 @@ export default function DashboardPage() {
         }
       };
       
-      loadProjects();
+      // Start loading after a short delay to let Firestore initialize
+      setTimeout(() => loadProjects(), 1000);
       
       // Set up real-time listener - this will sync when connection is established
       const unsubscribe = onSnapshot(q, 
