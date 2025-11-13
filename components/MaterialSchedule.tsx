@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { BIMItem } from '@/lib/types/bim';
-import { Download, Copy, Save, FileSpreadsheet } from 'lucide-react';
+import { Download, Copy, Save, FileSpreadsheet, Plus } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 interface MaterialScheduleProps {
@@ -54,6 +54,7 @@ const MaterialSchedule: React.FC<MaterialScheduleProps> = ({ materials, isLoadin
   const [editedMaterials, setEditedMaterials] = useState<BIMItem[]>([]);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showToast, setShowToast] = useState(false);
+  const [newlyAddedCode, setNewlyAddedCode] = useState<string | null>(null);
 
   // Ensure materials is always a valid array
   const safeMaterials = useMemo(() => {
@@ -137,6 +138,157 @@ const MaterialSchedule: React.FC<MaterialScheduleProps> = ({ materials, isLoadin
     }
   };
 
+  // Generate next available code based on existing codes
+  const generateNextCode = (): string => {
+    if (editedMaterials.length === 0) {
+      return 'NEW-01';
+    }
+
+    // Find all code prefixes and their highest numbers
+    const codeMap = new Map<string, number>();
+    editedMaterials.forEach(item => {
+      if (item.code) {
+        const parts = item.code.split('-');
+        if (parts.length >= 2) {
+          const prefix = parts[0];
+          const num = parseInt(parts[1], 10);
+          if (!isNaN(num)) {
+            const currentMax = codeMap.get(prefix) || 0;
+            if (num > currentMax) {
+              codeMap.set(prefix, num);
+            }
+          }
+        }
+      }
+    });
+
+    // Try to find the most common prefix (e.g., if CT-01, CT-02 exist, use CT-03)
+    let mostCommonPrefix = 'NEW';
+    let maxCount = 0;
+    
+    editedMaterials.forEach(item => {
+      if (item.code) {
+        const parts = item.code.split('-');
+        if (parts.length >= 2) {
+          const prefix = parts[0];
+          const count = editedMaterials.filter(m => m.code?.startsWith(prefix + '-')).length;
+          if (count > maxCount) {
+            maxCount = count;
+            mostCommonPrefix = prefix;
+          }
+        }
+      }
+    });
+
+    // Generate next code for the most common prefix
+    const nextNum = (codeMap.get(mostCommonPrefix) || 0) + 1;
+    const numStr = nextNum.toString().padStart(2, '0');
+    return `${mostCommonPrefix}-${numStr}`;
+  };
+
+  // Handle adding a new row
+  const handleAddNewRow = () => {
+    const newCode = generateNextCode();
+    const newItem: BIMItem = {
+      code: newCode,
+      area: '',
+      location: '',
+      finish: '',
+      supplierAndContact: '',
+      type: '',
+      pricePerSqm: {
+        low: 0,
+        mid: 0,
+        high: 0,
+      },
+    };
+
+    const updated = [...editedMaterials, newItem];
+    setEditedMaterials(updated);
+    setHasUnsavedChanges(true);
+    setNewlyAddedCode(newCode); // Mark this as newly added for auto-selection
+
+    if (onMaterialsChange) {
+      onMaterialsChange(updated);
+    }
+  };
+
+  // Compute filtered materials
+  const filteredMaterials = useMemo(() => {
+    const materialsToFilter = editedMaterials.length > 0 ? editedMaterials : safeMaterials;
+    
+    if (!materialsToFilter || materialsToFilter.length === 0) {
+      return [];
+    }
+
+    if (activeFilter === 'All') {
+      return materialsToFilter;
+    }
+
+    const allowedPrefixes = CATEGORY_CODES[activeFilter];
+    if (!allowedPrefixes || allowedPrefixes.length === 0) {
+      return materialsToFilter;
+    }
+
+    return materialsToFilter.filter(item => {
+      if (!item || !item.code || typeof item.code !== 'string') {
+        return false;
+      }
+      const parts = item.code.split('-');
+      if (parts.length === 0 || !parts[0]) {
+        return false;
+      }
+      const codePrefix = parts[0];
+      return allowedPrefixes.includes(codePrefix);
+    });
+  }, [editedMaterials, safeMaterials, activeFilter]);
+
+  // Compute sorted materials
+  const sortedMaterials = useMemo(() => {
+    return [...filteredMaterials].sort((a, b) => {
+      if (!a || !a.code || !b || !b.code) {
+        return 0;
+      }
+
+      const getCodePrefix = (code: string) => {
+        const parts = code.split('-');
+        return parts[0] || '';
+      };
+
+      const aCodePrefix = getCodePrefix(a.code);
+      const bCodePrefix = getCodePrefix(b.code);
+
+      if (aCodePrefix < bCodePrefix) return -1;
+      if (aCodePrefix > bCodePrefix) return 1;
+
+      const getCodeNumber = (code: string) => {
+        const parts = code.split('-');
+        if (parts.length < 2) return 0;
+        const num = parseInt(parts[1], 10);
+        return isNaN(num) ? 0 : num;
+      };
+      
+      const aCodeNum = getCodeNumber(a.code);
+      const bCodeNum = getCodeNumber(b.code);
+
+      if (aCodeNum < bCodeNum) return -1;
+      if (aCodeNum > bCodeNum) return 1;
+
+      return 0;
+    });
+  }, [filteredMaterials]);
+
+  // Auto-select newly added row after it's been sorted
+  useEffect(() => {
+    if (newlyAddedCode && sortedMaterials.length > 0) {
+      const index = sortedMaterials.findIndex(item => item.code === newlyAddedCode);
+      if (index >= 0) {
+        setSelectedRows(new Set([index]));
+        setNewlyAddedCode(null); // Clear the flag
+      }
+    }
+  }, [newlyAddedCode, sortedMaterials]);
+
   // Get available categories based on materials in the schedule
   const availableCategories = useMemo((): FilterCategory[] => {
     if (!safeMaterials || safeMaterials.length === 0) {
@@ -171,34 +323,6 @@ const MaterialSchedule: React.FC<MaterialScheduleProps> = ({ materials, isLoadin
     }
   }, [availableCategories, activeFilter]);
 
-  const getFilteredMaterials = (): BIMItem[] => {
-    const materialsToFilter = editedMaterials.length > 0 ? editedMaterials : safeMaterials;
-    
-    if (!materialsToFilter || materialsToFilter.length === 0) {
-      return [];
-    }
-
-    if (activeFilter === 'All') {
-      return materialsToFilter;
-    }
-
-    const allowedPrefixes = CATEGORY_CODES[activeFilter];
-    if (!allowedPrefixes || allowedPrefixes.length === 0) {
-      return materialsToFilter;
-    }
-
-    return materialsToFilter.filter(item => {
-      if (!item || !item.code || typeof item.code !== 'string') {
-        return false;
-      }
-      const parts = item.code.split('-');
-      if (parts.length === 0 || !parts[0]) {
-        return false;
-      }
-      const codePrefix = parts[0];
-      return allowedPrefixes.includes(codePrefix);
-    });
-  };
 
   const exportToCSV = () => {
     const materialsToExport = editedMaterials.length > 0 ? editedMaterials : safeMaterials;
@@ -300,8 +424,6 @@ const MaterialSchedule: React.FC<MaterialScheduleProps> = ({ materials, isLoadin
     );
   }
 
-  const filteredMaterials = getFilteredMaterials();
-
   if (safeMaterials.length === 0) {
     return (
       <div className="bg-white rounded-lg shadow-md p-6 text-center">
@@ -383,39 +505,6 @@ const MaterialSchedule: React.FC<MaterialScheduleProps> = ({ materials, isLoadin
     );
   }
 
-  const sortedMaterials = [...filteredMaterials].sort((a, b) => {
-    if (!a || !a.code || !b || !b.code) {
-      return 0;
-    }
-
-    const getCodePrefix = (code: string) => {
-      const parts = code.split('-');
-      return parts.length > 0 ? parts[0] : '';
-    };
-    
-    const aCodePrefix = getCodePrefix(a.code);
-    const bCodePrefix = getCodePrefix(b.code);
-
-    if (aCodePrefix < bCodePrefix) return -1;
-    if (aCodePrefix > bCodePrefix) return 1;
-
-    const getCodeNumber = (code: string) => {
-      const parts = code.split('-');
-      if (parts.length < 2) return 0;
-      const num = parseInt(parts[1], 10);
-      return isNaN(num) ? 0 : num;
-    };
-    
-    const aCodeNum = getCodeNumber(a.code);
-    const bCodeNum = getCodeNumber(b.code);
-
-    if (aCodeNum < bCodeNum) return -1;
-    if (aCodeNum > bCodeNum) return 1;
-
-    return 0;
-  });
-
-
   return (
     <div className="bg-white rounded-lg shadow-md relative">
       {/* Toast Notification */}
@@ -437,6 +526,17 @@ const MaterialSchedule: React.FC<MaterialScheduleProps> = ({ materials, isLoadin
               <div className="mr-2 px-3 py-1 bg-yellow-100 border border-yellow-300 rounded-md">
                 <span className="text-xs font-semibold text-yellow-800">Read-Only</span>
               </div>
+            )}
+            {!readOnly && (
+              <button
+                onClick={handleAddNewRow}
+                className="flex items-center px-3 py-2 text-sm text-white rounded-md transition-colors"
+                style={{ backgroundColor: '#42504A' }}
+                title="Add new row"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Add
+              </button>
             )}
             {hasUnsavedChanges && selectedRows.size === 0 && onSaveChanges && !readOnly && (
               <button
@@ -579,7 +679,16 @@ const MaterialSchedule: React.FC<MaterialScheduleProps> = ({ materials, isLoadin
                     )}
                   </td>
                   <td className="px-3 py-4 text-sm font-medium text-gray-900">
-                    {displayItem.code}
+                    {canEdit ? (
+                      <input
+                        type="text"
+                        value={displayItem.code || ''}
+                        onChange={(e) => handleMaterialUpdate(actualIndex, 'code', e.target.value)}
+                        className="w-full px-2 py-1 border border-gray-300 rounded focus:outline-none focus:border-blue-500 font-medium"
+                      />
+                    ) : (
+                      displayItem.code
+                    )}
                   </td>
                   <td className="px-3 py-4 text-sm text-gray-900">
                     {canEdit ? (
