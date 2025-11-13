@@ -89,6 +89,19 @@ export default function DashboardPage() {
   useEffect(() => {
     if (user) {
       console.log('Setting up project listener for user:', user.uid);
+      console.log('Firestore instance:', db.app.name, 'Project ID:', db.app.options.projectId);
+      
+      // Test Firestore connection first
+      const testConnection = async () => {
+        try {
+          const testDoc = doc(db, '_test', 'connection');
+          await getDoc(testDoc);
+          console.log('✅ Firestore connection test: OK');
+        } catch (error: any) {
+          console.error('❌ Firestore connection test failed:', error?.code, error?.message);
+        }
+      };
+      testConnection();
       
       // Fetch user's own projects
       const q = query(collection(db, 'projects'), where('userId', '==', user.uid));

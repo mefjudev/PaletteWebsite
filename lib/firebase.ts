@@ -1,6 +1,6 @@
 import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
 import { getAuth, Auth } from 'firebase/auth';
-import { getFirestore, Firestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
+import { getFirestore, Firestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, enableNetwork, disableNetwork } from 'firebase/firestore';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -42,6 +42,13 @@ if (typeof window !== 'undefined') {
       // On Vercel, use default Firestore (no persistent cache) to avoid connectivity issues
       db = getFirestore(app);
       console.log('Firestore initialized without persistent cache (Vercel)');
+      
+      // Force enable network connection on Vercel
+      enableNetwork(db).then(() => {
+        console.log('✅ Firestore network enabled');
+      }).catch((error) => {
+        console.warn('⚠️ Could not enable Firestore network:', error);
+      });
     }
   } catch (error) {
     // Fallback to regular Firestore if initialization fails
