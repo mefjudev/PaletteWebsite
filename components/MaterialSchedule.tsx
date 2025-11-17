@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { BIMItem } from '@/lib/types/bim';
-import { Download, Copy, Save, FileSpreadsheet, Plus, Trash2 } from 'lucide-react';
+import { Download, Copy, Save, FileSpreadsheet, Plus, Trash2, Upload, X, Loader2, Check } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { compressImage } from '@/lib/utils/imageCompressor';
 
 interface MaterialScheduleProps {
   materials: BIMItem[];
@@ -54,6 +55,15 @@ const MaterialSchedule: React.FC<MaterialScheduleProps> = ({ materials, isLoadin
   const [editedMaterials, setEditedMaterials] = useState<BIMItem[]>([]);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showToast, setShowToast] = useState(false);
+  const [showUploadSheet, setShowUploadSheet] = useState(false);
+  const [uploadedImage, setUploadedImage] = useState<File | null>(null);
+  const [scannedMaterials, setScannedMaterials] = useState<BIMItem[]>([]);
+  const [isScanning, setIsScanning] = useState(false);
+  const [selectedScannedMaterials, setSelectedScannedMaterials] = useState<Set<number>>(new Set());
+  const [isDragOver, setIsDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const uploadSheetRef = useRef<HTMLDivElement>(null);
+  const tableBodyRef = useRef<HTMLTableSectionElement>(null);
 
   // Ensure materials is always a valid array
   const safeMaterials = useMemo(() => {
@@ -165,6 +175,18 @@ const MaterialSchedule: React.FC<MaterialScheduleProps> = ({ materials, isLoadin
     if (onMaterialsChange) {
       onMaterialsChange(updated);
     }
+
+    // Scroll to the table body after a short delay to ensure DOM is updated
+    setTimeout(() => {
+      if (tableBodyRef.current) {
+        const lastRow = tableBodyRef.current.lastElementChild as HTMLElement;
+        if (lastRow) {
+          lastRow.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        } else {
+          tableBodyRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }
+      }
+    }, 100);
   };
 
   // Handle deleting a row
@@ -192,6 +214,181 @@ const MaterialSchedule: React.FC<MaterialScheduleProps> = ({ materials, isLoadin
         }
       }
     }
+  };
+
+  // Handle opening upload sheet
+  const handleOpenUploadSheet = () => {
+    setShowUploadSheet(true);
+    setUploadedImage(null);
+    setScannedMaterials([]);
+    setSelectedScannedMaterials(new Set());
+    
+    // Scroll to upload sheet after a short delay to ensure DOM is updated
+    setTimeout(() => {
+      if (uploadSheetRef.current) {
+        uploadSheetRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 100);
+  };
+
+  // Handle closing upload sheet
+  const handleCloseUploadSheet = () => {
+    setShowUploadSheet(false);
+    setUploadedImage(null);
+    setScannedMaterials([]);
+    setSelectedScannedMaterials(new Set());
+  };
+
+  // Handle image selection for upload
+  const handleImageSelect = async (file: File) => {
+    setUploadedImage(file);
+    await generateScannedMaterials(file);
+  };
+
+  // Handle drag and drop
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+
+    const files = Array.from(e.dataTransfer.files);
+    const imageFile = files.find(file => file.type.startsWith('image/'));
+    
+    if (imageFile) {
+      try {
+        const compressedFile = await compressImage(imageFile);
+        handleImageSelect(compressedFile);
+      } catch (error) {
+        console.error("Image compression failed:", error);
+        handleImageSelect(imageFile);
+      }
+    }
+  };
+
+  // Generate materials from uploaded image
+  const generateScannedMaterials = async (file: File) => {
+    setIsScanning(true);
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+
+      const response = await fetch('/api/generate-materials', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`Failed to generate materials: ${errorData.error || 'Unknown error'}`);
+      }
+
+      const data = await response.json();
+      setScannedMaterials(data.materials || []);
+    } catch (err) {
+      console.error('Error generating scanned materials:', err);
+      setScannedMaterials([]);
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
+  // Toggle selection of scanned material
+  const toggleScannedMaterialSelection = (index: number) => {
+    const newSelected = new Set(selectedScannedMaterials);
+    if (newSelected.has(index)) {
+      newSelected.delete(index);
+    } else {
+      newSelected.add(index);
+    }
+    setSelectedScannedMaterials(newSelected);
+  };
+
+  // Helper function to get the next available code number for a prefix
+  const getNextAvailableCode = (prefix: string, existingMaterials: BIMItem[]): string => {
+    // Extract all codes with this prefix
+    const existingCodes = existingMaterials
+      .map(m => m.code)
+      .filter(code => {
+        const parts = code.split('-');
+        return parts.length >= 2 && parts[0] === prefix;
+      })
+      .map(code => {
+        const parts = code.split('-');
+        const num = parseInt(parts[1], 10);
+        return isNaN(num) ? 0 : num;
+      })
+      .sort((a, b) => b - a); // Sort descending
+
+    // Find the highest number and add 1
+    const nextNumber = existingCodes.length > 0 ? existingCodes[0] + 1 : 1;
+    
+    // Format with leading zero if less than 10
+    const formattedNumber = nextNumber < 10 ? `0${nextNumber}` : `${nextNumber}`;
+    return `${prefix}-${formattedNumber}`;
+  };
+
+  // Append selected scanned materials to current project
+  const handleAppendSelectedMaterials = () => {
+    if (selectedScannedMaterials.size === 0) {
+      alert('Please select at least one material to append.');
+      return;
+    }
+
+    // Show confirmation alert
+    const confirmMessage = `Are you sure you want to append ${selectedScannedMaterials.size} material(s) to the current project?`;
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+
+    // Process materials one by one, updating the existing materials list as we go
+    // This ensures that if multiple materials with the same code are appended,
+    // each gets the next available number
+    let currentMaterials = [...editedMaterials];
+    const materialsToAppend = Array.from(selectedScannedMaterials).map(index => {
+      const material = { ...scannedMaterials[index] };
+      
+      // Check if code already exists in current materials (including previously appended ones)
+      const codeExists = currentMaterials.some(m => m.code === material.code);
+      
+      if (codeExists) {
+        // Extract prefix from code (e.g., "CT" from "CT-01")
+        const parts = material.code.split('-');
+        if (parts.length >= 2) {
+          const prefix = parts[0];
+          // Get next available code number based on current materials
+          material.code = getNextAvailableCode(prefix, currentMaterials);
+        }
+      }
+      
+      // Add this material to currentMaterials so the next one can check against it
+      currentMaterials.push(material);
+      
+      return material;
+    });
+
+    const updatedMaterials = [...editedMaterials, ...materialsToAppend];
+    
+    setEditedMaterials(updatedMaterials);
+    setHasUnsavedChanges(true);
+    
+    if (onMaterialsChange) {
+      onMaterialsChange(updatedMaterials);
+    }
+
+    // Close upload sheet and reset
+    handleCloseUploadSheet();
   };
 
   // Compute filtered materials
@@ -499,15 +696,26 @@ const MaterialSchedule: React.FC<MaterialScheduleProps> = ({ materials, isLoadin
               </div>
             )}
             {!readOnly && (
-              <button
-                onClick={handleAddNewRow}
-                className="flex items-center px-3 py-2 text-sm text-white rounded-md transition-colors"
-                style={{ backgroundColor: '#6A7E76' }}
-                title="Add new row"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Add
-              </button>
+              <>
+                <button
+                  onClick={handleAddNewRow}
+                  className="flex items-center px-3 py-2 text-sm text-white rounded-md transition-colors"
+                  style={{ backgroundColor: '#6A7E76' }}
+                  title="Add new row"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add
+                </button>
+                <button
+                  onClick={handleOpenUploadSheet}
+                  className="flex items-center px-3 py-2 text-sm text-white rounded-md transition-colors"
+                  style={{ backgroundColor: '#6A7E76' }}
+                  title="Upload image to scan new materials"
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  Upload Image
+                </button>
+              </>
             )}
             {hasUnsavedChanges && selectedRows.size === 0 && onSaveChanges && !readOnly && (
               <button
@@ -626,7 +834,7 @@ const MaterialSchedule: React.FC<MaterialScheduleProps> = ({ materials, isLoadin
               )}
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
+          <tbody ref={tableBodyRef} className="bg-white divide-y divide-gray-200">
             {sortedMaterials.map((item, filteredIndex) => {
               // Find the actual index in editedMaterials by code
               const actualIndex = editedMaterials.findIndex(m => m.code === item.code);
@@ -776,6 +984,162 @@ const MaterialSchedule: React.FC<MaterialScheduleProps> = ({ materials, isLoadin
           </tbody>
         </table>
       </div>
+
+      {/* Upload Sheet - appears below the schedule */}
+      {showUploadSheet && (
+        <div ref={uploadSheetRef} className="mt-6 border-t-2 border-gray-300 pt-6">
+          <div className="flex justify-between items-center mb-4">
+            <h4 className="text-lg font-semibold text-gray-900">Scan New Materials</h4>
+            <button
+              onClick={handleCloseUploadSheet}
+              className="p-2 rounded transition-colors text-gray-600 hover:bg-gray-100"
+              title="Close upload sheet"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Upload Area */}
+          {!uploadedImage && !isScanning && (
+            <div className="mb-6">
+              <div
+                className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
+                  isDragOver
+                    ? 'border-blue-500 bg-blue-50'
+                    : 'border-gray-300 hover:border-gray-400'
+                }`}
+                onClick={() => fileInputRef.current?.click()}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+              >
+                <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                <p className="text-sm font-medium text-gray-700 mb-1">
+                  {isDragOver ? 'Drop image here' : 'Click to upload or drag and drop'}
+                </p>
+                <p className="text-xs text-gray-500">
+                  Supports JPG, PNG, and other image formats
+                </p>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      try {
+                        const compressedFile = await compressImage(file);
+                        handleImageSelect(compressedFile);
+                      } catch (error) {
+                        console.error("Image compression failed:", error);
+                        handleImageSelect(file);
+                      }
+                    }
+                  }}
+                  className="hidden"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Loading State */}
+          {isScanning && (
+            <div className="mb-6 p-6 bg-gray-50 rounded-lg text-center">
+              <Loader2 className="w-8 h-8 mx-auto mb-2 animate-spin" style={{ color: '#42504A' }} />
+              <p className="text-sm text-gray-600">Scanning image and generating materials...</p>
+            </div>
+          )}
+
+          {/* Scanned Materials Preview */}
+          {scannedMaterials.length > 0 && !isScanning && (
+            <div className="bg-gray-50 rounded-lg p-4">
+              <div className="flex justify-between items-center mb-4">
+                <p className="text-sm font-medium text-gray-700">
+                  Select materials to append to current project ({selectedScannedMaterials.size} selected)
+                </p>
+                <button
+                  onClick={handleAppendSelectedMaterials}
+                  disabled={selectedScannedMaterials.size === 0}
+                  className="flex items-center px-4 py-2 text-sm text-white rounded-md transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{ backgroundColor: '#42504A' }}
+                >
+                  <Check className="w-4 h-4 mr-2" />
+                  Append Selected ({selectedScannedMaterials.size})
+                </button>
+              </div>
+
+              {/* Compact Preview Table */}
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200 bg-white rounded-lg">
+                  <thead style={{ backgroundColor: '#90AAA1' }}>
+                    <tr>
+                      <th className="px-2 py-2 text-left text-xs font-medium text-white w-8">
+                        <input
+                          type="checkbox"
+                          className="rounded border-gray-300"
+                          checked={selectedScannedMaterials.size === scannedMaterials.length && scannedMaterials.length > 0}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedScannedMaterials(new Set(scannedMaterials.map((_, i) => i)));
+                            } else {
+                              setSelectedScannedMaterials(new Set());
+                            }
+                          }}
+                        />
+                      </th>
+                      <th className="px-2 py-2 text-left text-xs font-medium text-white">Code</th>
+                      <th className="px-2 py-2 text-left text-xs font-medium text-white">Area</th>
+                      <th className="px-2 py-2 text-left text-xs font-medium text-white">Location</th>
+                      <th className="px-2 py-2 text-left text-xs font-medium text-white">Material</th>
+                      <th className="px-2 py-2 text-left text-xs font-medium text-white">Supplier</th>
+                      <th className="px-2 py-2 text-left text-xs font-medium text-white">Price</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {scannedMaterials.map((item, index) => {
+                      const isSelected = selectedScannedMaterials.has(index);
+                      return (
+                        <tr
+                          key={`scanned-${index}`}
+                          className={`hover:bg-gray-50 ${isSelected ? 'bg-blue-50' : ''}`}
+                        >
+                          <td className="px-2 py-2">
+                            <input
+                              type="checkbox"
+                              className="rounded border-gray-300"
+                              checked={isSelected}
+                              onChange={() => toggleScannedMaterialSelection(index)}
+                            />
+                          </td>
+                          <td className="px-2 py-2 text-xs font-medium text-gray-900">{item.code}</td>
+                          <td className="px-2 py-2 text-xs text-gray-700">{item.area}</td>
+                          <td className="px-2 py-2 text-xs text-gray-700">{item.location}</td>
+                          <td className="px-2 py-2 text-xs text-gray-700">{item.type || '-'}</td>
+                          <td className="px-2 py-2 text-xs text-gray-700 max-w-xs truncate">{item.supplierAndContact || '-'}</td>
+                          <td className="px-2 py-2 text-xs text-gray-700">
+                            <div className="text-xs">
+                              {item.pricePerSqm?.low ? `£${item.pricePerSqm.low}` : '-'} / 
+                              {item.pricePerSqm?.mid ? `£${item.pricePerSqm.mid}` : '-'} / 
+                              {item.pricePerSqm?.high ? `£${item.pricePerSqm.high}` : '-'}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* No materials message */}
+          {uploadedImage && scannedMaterials.length === 0 && !isScanning && (
+            <div className="p-6 bg-yellow-50 rounded-lg text-center">
+              <p className="text-sm text-yellow-800">No materials found in the scanned image. Please try a different image.</p>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
