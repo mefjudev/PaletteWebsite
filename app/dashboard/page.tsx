@@ -1261,7 +1261,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Right Main Content Area */}
-      <div className="w-2/3 h-screen bg-white overflow-y-auto pl-8">
+      <div className="flex-1 h-screen bg-white overflow-y-auto">
         {/* Success Toast Notification - shown globally */}
         {showMergeSuccessToast && (
           <div className="fixed top-4 right-4 z-50 animate-fade-in">
@@ -1276,7 +1276,7 @@ export default function DashboardPage() {
         
         {/* Upload / Merge View */}
         {showUploadMerge && (
-          <div className="p-8">
+          <div className="p-12 max-w-7xl mx-auto">
             {error && (
               <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
                 <p className="text-red-700">{error}</p>
@@ -1472,7 +1472,7 @@ export default function DashboardPage() {
 
         {showImport && !showUploadMerge && materials.length === 0 && !isParsing && (
           <div className="h-full flex items-center justify-center p-8">
-            <div className="w-full max-w-2xl">
+            <div className="w-full max-w-4xl">
               <h3 className="text-2xl font-bold text-gray-800 mb-6 text-center font-heading">
                 Import CSV or Excel File
               </h3>
@@ -1558,7 +1558,7 @@ export default function DashboardPage() {
 
         {!showUploader && !showImport && !showUploadMerge && materials.length === 0 && (
           <div className="h-full flex items-center justify-center">
-            <div className="text-center max-w-lg px-8">
+            <div className="text-center max-w-2xl px-8">
               <p className="text-lg text-gray-600 mb-8">
                 Start by generating your first material schedule. Upload an image of your space and let AI analyze the materials for you.
               </p>
@@ -1588,7 +1588,7 @@ export default function DashboardPage() {
 
         {showUploader && !showUploadMerge && materials.length === 0 && !isLoading && (
           <div className="h-full flex items-center justify-center p-8">
-            <div className="w-full max-w-2xl">
+            <div className="w-full max-w-4xl">
               <h3 className="text-2xl font-bold text-gray-800 mb-6 text-center font-heading">
                 Upload an Image to Generate Schedule
               </h3>
@@ -1621,7 +1621,7 @@ export default function DashboardPage() {
         )}
 
         {materials.length > 0 && !isLoading && !showUploadMerge && (
-          <div className="py-8 pr-8">
+          <div className="py-8 px-12 max-w-[1800px] mx-auto">
             {/* Save Changes Success Toast */}
             {showSaveChangesToast && (
               <div className="fixed top-4 right-4 z-50 animate-fade-in">
