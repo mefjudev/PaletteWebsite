@@ -1101,7 +1101,7 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen flex overflow-hidden">
       {/* Left Sidebar */}
-      <div className="w-1/3 h-screen flex flex-col items-center overflow-y-auto"
+      <div className="w-80 h-screen flex flex-col items-center overflow-y-auto"
            style={{ backgroundColor: '#445D56' }}>
         
         {/* Logo Box */}
