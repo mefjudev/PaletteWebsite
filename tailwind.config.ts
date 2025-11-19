@@ -8,6 +8,10 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        heading: ['var(--font-ibarra)', 'serif'],
+        body: ['var(--font-inter)', 'sans-serif'],
+      },
       keyframes: {
         'fade-in': {
           '0%': { opacity: '0', transform: 'translateY(-10px)' },

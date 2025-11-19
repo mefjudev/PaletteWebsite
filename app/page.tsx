@@ -93,7 +93,7 @@ export default function LoginPage() {
     <div className="min-h-screen flex flex-col items-center justify-center px-4"
          style={{ backgroundColor: '#42504A' }}>
       {/* Logo/Title */}
-      <h1 className="text-7xl md:text-8xl font-serif text-white mb-12" style={{ letterSpacing: '0.1em' }}>
+      <h1 className="text-7xl md:text-8xl font-heading text-white mb-12" style={{ letterSpacing: '0.1em' }}>
         Palette
       </h1>
 

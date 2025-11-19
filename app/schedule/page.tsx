@@ -101,7 +101,7 @@ export default function SchedulePage() {
           {/* Left Column - Upload */}
           <div className="space-y-6">
             <div className="rounded-lg shadow-md p-6" style={{ backgroundColor: '#42504A' }}>
-              <h2 className="text-2xl font-semibold text-white mb-4">
+              <h2 className="text-2xl font-semibold text-white mb-4 font-heading">
                 Upload Image
               </h2>
               <ImageUpload
@@ -145,7 +145,7 @@ export default function SchedulePage() {
 
           {/* Right Column - Info */}
           <div className="flex flex-col justify-center">
-            <h1 className="text-4xl font-bold mb-4 text-gray-900">
+            <h1 className="text-4xl font-bold mb-4 text-gray-900 font-heading">
               Material Schedule Generator
             </h1>
             <p className="text-lg text-gray-600">

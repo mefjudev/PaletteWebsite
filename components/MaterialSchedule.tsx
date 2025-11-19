@@ -616,7 +616,7 @@ const MaterialSchedule: React.FC<MaterialScheduleProps> = ({ materials, isLoadin
         )}
         <div className="p-6">
           <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">BIM Material Schedule</h3>
+            <h3 className="text-lg font-semibold text-gray-900 font-heading">BIM Material Schedule</h3>
             <div className="flex space-x-2">
               <button
                 onClick={copyToClipboard}
@@ -989,7 +989,7 @@ const MaterialSchedule: React.FC<MaterialScheduleProps> = ({ materials, isLoadin
       {showUploadSheet && (
         <div ref={uploadSheetRef} className="mt-6 border-t-2 border-gray-300 pt-6">
           <div className="flex justify-between items-center mb-4">
-            <h4 className="text-lg font-semibold text-gray-900">Scan New Materials</h4>
+            <h4 className="text-lg font-semibold text-gray-900 font-heading">Scan New Materials</h4>
             <button
               onClick={handleCloseUploadSheet}
               className="p-2 rounded transition-colors text-gray-600 hover:bg-gray-100"

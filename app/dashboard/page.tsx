@@ -8,8 +8,9 @@ import { collection, addDoc, query, where, getDocs, getDocsFromServer, getDocsFr
 import ImageUpload from '@/components/ImageUpload';
 import MaterialSchedule from '@/components/MaterialSchedule';
 import { BIMItem } from '@/lib/types/bim';
-import { Loader2, Save, Trash2, FileUp, Share2, UserPlus, X, Users } from 'lucide-react';
+import { Loader2, Save, Trash2, FileUp, Share2, UserPlus, X, Users, Upload } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { compressImage } from '@/lib/utils/imageCompressor';
 
 interface SavedProject {
   id: string;
@@ -29,6 +30,7 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showUploader, setShowUploader] = useState(false);
+  const [showUploadMerge, setShowUploadMerge] = useState(false);
   const [savedProjects, setSavedProjects] = useState<SavedProject[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [projectName, setProjectName] = useState('');
@@ -40,6 +42,14 @@ export default function DashboardPage() {
   const [importFile, setImportFile] = useState<File | null>(null);
   const [isParsing, setIsParsing] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [uploadMergeImage, setUploadMergeImage] = useState<File | null>(null);
+  const [uploadMergeMaterials, setUploadMergeMaterials] = useState<BIMItem[]>([]);
+  const [isUploadMergeScanning, setIsUploadMergeScanning] = useState(false);
+  const [projectSelections, setProjectSelections] = useState<Record<string, { addition: boolean; overwrite: boolean }>>({});
+  const [isUploadMergeDragOver, setIsUploadMergeDragOver] = useState(false);
+  const [showMergeSuccessToast, setShowMergeSuccessToast] = useState(false);
+  const [showSaveChangesToast, setShowSaveChangesToast] = useState(false);
+  const [isOverwriting, setIsOverwriting] = useState(false);
   const [sharedProjects, setSharedProjects] = useState<SavedProject[]>([]);
   const [showShareDialog, setShowShareDialog] = useState(false);
   const [shareProjectId, setShareProjectId] = useState<string | null>(null);
@@ -278,7 +288,11 @@ export default function DashboardPage() {
     setCurrentProjectId(null);
     setShowUploader(true);
     setShowImport(false);
+    setShowUploadMerge(false);
     setImportFile(null);
+    setUploadMergeImage(null);
+    setUploadMergeMaterials([]);
+    setProjectSelections({});
   };
 
   const handleImport = () => {
@@ -286,8 +300,161 @@ export default function DashboardPage() {
     setCurrentProjectId(null);
     setShowImport(true);
     setShowUploader(false);
+    setShowUploadMerge(false);
     setImportFile(null);
+    setUploadMergeImage(null);
+    setUploadMergeMaterials([]);
+    setProjectSelections({});
     setError(null);
+  };
+
+  const handleUpload = () => {
+    setMaterials([]);
+    setCurrentProjectId(null);
+    setShowUploadMerge(true);
+    setShowUploader(false);
+    setShowImport(false);
+    setImportFile(null);
+    setUploadMergeImage(null);
+    setUploadMergeMaterials([]);
+    setProjectSelections({});
+    setError(null);
+  };
+
+  const handleUploadMergeImageSelect = async (file: File) => {
+    setUploadMergeImage(file);
+    setIsUploadMergeScanning(true);
+    setError(null);
+    
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+
+      const response = await fetch('/api/generate-materials', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`Failed to generate materials: ${errorData.error || 'Unknown error'}`);
+      }
+
+      const data = await response.json();
+      setUploadMergeMaterials(data.materials || []);
+    } catch (err) {
+      setError('Failed to generate materials. Please try again.');
+      console.error('Error:', err);
+      setUploadMergeMaterials([]);
+    } finally {
+      setIsUploadMergeScanning(false);
+    }
+  };
+
+  const handleProjectSelectionChange = (projectId: string, type: 'addition' | 'overwrite', checked: boolean) => {
+    setProjectSelections(prev => {
+      const current = prev[projectId] || { addition: false, overwrite: false };
+      return {
+        ...prev,
+        [projectId]: {
+          ...current,
+          [type]: checked,
+          [type === 'addition' ? 'overwrite' : 'addition']: checked ? false : current[type === 'addition' ? 'overwrite' : 'addition']
+        }
+      };
+    });
+  };
+
+  const getNextAvailableCode = (prefix: string, existingMaterials: BIMItem[]): string => {
+    const existingCodes = existingMaterials
+      .map(m => m.code)
+      .filter(code => {
+        const parts = code.split('-');
+        return parts.length >= 2 && parts[0] === prefix;
+      })
+      .map(code => {
+        const parts = code.split('-');
+        const num = parseInt(parts[1], 10);
+        return isNaN(num) ? 0 : num;
+      })
+      .sort((a, b) => b - a);
+
+    const nextNumber = existingCodes.length > 0 ? existingCodes[0] + 1 : 1;
+    const formattedNumber = nextNumber < 10 ? `0${nextNumber}` : `${nextNumber}`;
+    return `${prefix}-${formattedNumber}`;
+  };
+
+  const handleConfirmMerge = async (type: 'addition' | 'overwrite') => {
+    const selectedProjects = Object.entries(projectSelections)
+      .filter(([_, selection]) => selection[type])
+      .map(([projectId]) => projectId);
+
+    if (selectedProjects.length === 0) {
+      alert(`Please select at least one project for ${type === 'addition' ? 'addition' : 'overwrite'}.`);
+      return;
+    }
+
+    const projectNames = selectedProjects.map(id => savedProjects.find(p => p.id === id)?.name).filter(Boolean).join(', ');
+    const confirmed = window.confirm(`You are about to ${type === 'addition' ? 'append' : 'overwrite'} materials to the following project(s): ${projectNames}\n\nClick OK to proceed or Cancel to abort.`);
+    
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      for (const projectId of selectedProjects) {
+        const project = savedProjects.find(p => p.id === projectId);
+        if (!project) continue;
+
+        if (type === 'addition') {
+          // Append materials with duplicate code handling
+          let currentMaterials = [...(project.materials || [])];
+          const materialsToAppend = uploadMergeMaterials.map(material => {
+            const materialCopy = { ...material };
+            const codeExists = currentMaterials.some(m => m.code === materialCopy.code);
+            
+            if (codeExists) {
+              const parts = materialCopy.code.split('-');
+              if (parts.length >= 2) {
+                const prefix = parts[0];
+                materialCopy.code = getNextAvailableCode(prefix, currentMaterials);
+              }
+            }
+            
+            currentMaterials.push(materialCopy);
+            return materialCopy;
+          });
+
+          await updateDoc(doc(db, 'projects', projectId), {
+            materials: [...(project.materials || []), ...materialsToAppend],
+            updatedAt: new Date()
+          });
+        } else {
+          // Overwrite materials
+          await updateDoc(doc(db, 'projects', projectId), {
+            materials: uploadMergeMaterials,
+            updatedAt: new Date()
+          });
+        }
+      }
+
+      // Show success toast and close view after a brief delay
+      setShowMergeSuccessToast(true);
+      setTimeout(() => {
+        setShowMergeSuccessToast(false);
+      }, 3000);
+
+      // Close the view after showing toast briefly
+      setTimeout(() => {
+        setShowUploadMerge(false);
+        setUploadMergeImage(null);
+        setUploadMergeMaterials([]);
+        setProjectSelections({});
+      }, 500);
+    } catch (error) {
+      console.error('Error merging materials:', error);
+      setError(`Failed to ${type === 'addition' ? 'append' : 'overwrite'} materials. Please try again.`);
+    }
   };
 
   const handleImageSelect = (file: File) => {
@@ -400,8 +567,12 @@ export default function DashboardPage() {
       setCurrentProjectId(project.id);
       setShowUploader(false);
       setShowImport(false);
+      setShowUploadMerge(false);
       setSelectedImage(null);
       setImportFile(null);
+      setUploadMergeImage(null);
+      setUploadMergeMaterials([]);
+      setProjectSelections({});
       setError(null);
     } catch (error) {
       console.error('Error loading project:', error);
@@ -933,13 +1104,13 @@ export default function DashboardPage() {
         <div className="w-full px-8 py-8 rounded-lg mb-8"
              style={{ backgroundColor: '#445D56', borderRadius: '0' }}>
           {/* Logo */}
-          <div className="text-[12rem] font-bold text-white mb-6 text-center" style={{ letterSpacing: '0.05em', lineHeight: '1' }}>
+          <div className="text-[12rem] font-bold text-white mb-6 text-center font-heading" style={{ letterSpacing: '0.05em', lineHeight: '1' }}>
             P
           </div>
 
           {/* Welcome Section */}
           <div className="text-center">
-            <div className="text-xl text-white mb-2 font-semibold">
+            <div className="text-xl text-white mb-2 font-semibold font-heading">
               Welcome Back
             </div>
             <div className="text-sm text-white">
@@ -948,27 +1119,39 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Generate Schedule Button */}
-        <button
-          onClick={handleGenerateSchedule}
-          className="w-64 py-4 px-6 text-2xl text-white font-semibold rounded-lg transition-opacity hover:opacity-80 mb-4"
-          style={{ backgroundColor: '#6A7E76' }}
-        >
-          Generate Schedule
-        </button>
+        {/* Button Container */}
+        <div className="w-full max-w-xs space-y-4">
+          {/* Generate Schedule Button */}
+          <button
+            onClick={handleGenerateSchedule}
+            className="w-full py-4 px-6 text-2xl text-white font-semibold rounded-lg transition-opacity hover:opacity-80"
+            style={{ backgroundColor: '#6A7E76' }}
+          >
+            Generate Schedule
+          </button>
 
-        {/* Import Button */}
-        <button
-          onClick={handleImport}
-          className="w-64 py-4 px-6 text-2xl text-white font-semibold rounded-lg transition-opacity hover:opacity-80"
-          style={{ backgroundColor: '#6A7E76' }}
-        >
-          Import
-        </button>
+          {/* Import Button */}
+          <button
+            onClick={handleImport}
+            className="w-full py-4 px-6 text-2xl text-white font-semibold rounded-lg transition-opacity hover:opacity-80"
+            style={{ backgroundColor: '#6A7E76' }}
+          >
+            Import File
+          </button>
+
+          {/* Upload Button */}
+          <button
+            onClick={handleUpload}
+            className="w-full py-4 px-6 text-2xl text-white font-semibold rounded-lg transition-opacity hover:opacity-80"
+            style={{ backgroundColor: '#6A7E76' }}
+          >
+            Upload / Merge
+          </button>
+        </div>
 
         {/* Saved Projects Section */}
         <div className="w-full max-w-xs mt-8 px-4">
-          <h3 className="text-lg font-semibold text-white mb-4">
+          <h3 className="text-lg font-semibold text-white mb-4 font-heading">
             My Projects
           </h3>
           <div className="space-y-2">
@@ -1025,7 +1208,7 @@ export default function DashboardPage() {
         {/* Shared Projects Section */}
         {sharedProjects.length > 0 && (
           <div className="w-full max-w-xs mt-12 px-4">
-            <h3 className="text-lg font-semibold text-white mb-4 flex items-center">
+            <h3 className="text-lg font-semibold text-white mb-4 flex items-center font-heading">
               <Users className="w-5 h-5 mr-2" />
               Shared With Me
             </h3>
@@ -1062,10 +1245,216 @@ export default function DashboardPage() {
 
       {/* Right Main Content Area */}
       <div className="w-2/3 h-screen bg-white overflow-y-auto pl-8">
-        {showImport && materials.length === 0 && !isParsing && (
+        {/* Success Toast Notification - shown globally */}
+        {showMergeSuccessToast && (
+          <div className="fixed top-4 right-4 z-50 animate-fade-in">
+            <div className="bg-green-500 text-white px-4 py-3 rounded-lg shadow-lg flex items-center space-x-2">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+              <span className="font-medium">Successfully merged materials!</span>
+            </div>
+          </div>
+        )}
+        
+        {/* Upload / Merge View */}
+        {showUploadMerge && (
+          <div className="p-8">
+            {error && (
+              <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-red-700">{error}</p>
+              </div>
+            )}
+            <div className="flex flex-col space-y-8">
+              {/* Top Row - Upload and Import Side by Side */}
+              <div className="grid grid-cols-2 gap-8">
+                {/* Upload Section */}
+                <div>
+                  <h2 className="text-2xl font-bold mb-4 font-heading">Upload</h2>
+                  <div
+                    className={`border-2 rounded-lg p-12 text-center cursor-pointer transition-colors ${
+                      isUploadMergeDragOver ? 'border-blue-500 bg-blue-100' : 'border-gray-300 hover:border-gray-400'
+                    }`}
+                    style={{ backgroundColor: isUploadMergeDragOver ? '#B8D4E3' : '#90AAA1', minHeight: '300px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    onClick={() => {
+                      const input = document.createElement('input');
+                      input.type = 'file';
+                      input.accept = 'image/*';
+                      input.onchange = async (e) => {
+                        const file = (e.target as HTMLInputElement).files?.[0];
+                        if (file) {
+                          try {
+                            const compressedFile = await compressImage(file);
+                            handleUploadMergeImageSelect(compressedFile);
+                          } catch (error) {
+                            console.error("Image compression failed:", error);
+                            handleUploadMergeImageSelect(file);
+                          }
+                        }
+                      };
+                      input.click();
+                    }}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setIsUploadMergeDragOver(true);
+                    }}
+                    onDragLeave={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setIsUploadMergeDragOver(false);
+                    }}
+                    onDrop={async (e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setIsUploadMergeDragOver(false);
+
+                      const files = Array.from(e.dataTransfer.files);
+                      const imageFile = files.find(file => file.type.startsWith('image/'));
+                      
+                      if (imageFile) {
+                        try {
+                          const compressedFile = await compressImage(imageFile);
+                          handleUploadMergeImageSelect(compressedFile);
+                        } catch (error) {
+                          console.error("Image compression failed:", error);
+                          handleUploadMergeImageSelect(imageFile);
+                        }
+                      }
+                    }}
+                  >
+                    {isUploadMergeScanning ? (
+                      <div className="text-center">
+                        <Loader2 className="w-16 h-16 mx-auto mb-4 animate-spin text-white" />
+                        <p className="text-white text-lg">Scanning image...</p>
+                      </div>
+                    ) : (
+                      <h1 className="text-8xl font-heading text-white" style={{ letterSpacing: '0.1em' }}>
+                        Palette
+                      </h1>
+                    )}
+                  </div>
+                </div>
+
+                {/* Import Section */}
+                <div>
+                  <h2 className="text-2xl font-bold mb-4 font-heading">Import</h2>
+                  <div className="border border-gray-300 rounded-lg overflow-hidden">
+                    <table className="w-full">
+                      <thead style={{ backgroundColor: '#90AAA1' }}>
+                        <tr>
+                          <th className="px-3 py-2 text-left text-sm font-medium text-white border border-gray-300">Schedule</th>
+                          <th className="px-3 py-2 text-left text-sm font-medium text-white border border-gray-300">Addition</th>
+                          <th className="px-3 py-2 text-left text-sm font-medium text-white border border-gray-300">Overwrite</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {savedProjects.map((project) => {
+                          const selection = projectSelections[project.id] || { addition: false, overwrite: false };
+                          return (
+                            <tr key={project.id} className="border-b border-gray-300">
+                              <td className="px-3 py-2 text-sm font-semibold border border-gray-300">{project.name}</td>
+                              <td className="px-3 py-2 text-center border border-gray-300">
+                                <input
+                                  type="checkbox"
+                                  checked={selection.addition}
+                                  onChange={(e) => handleProjectSelectionChange(project.id, 'addition', e.target.checked)}
+                                  className="w-4 h-4"
+                                />
+                              </td>
+                              <td className="px-3 py-2 text-center border border-gray-300">
+                                <input
+                                  type="checkbox"
+                                  checked={selection.overwrite}
+                                  onChange={(e) => handleProjectSelectionChange(project.id, 'overwrite', e.target.checked)}
+                                  className="w-4 h-4"
+                                />
+                              </td>
+                            </tr>
+                          );
+                        })}
+                        {savedProjects.length === 0 && (
+                          <tr>
+                            <td colSpan={3} className="px-3 py-4 text-sm text-center text-gray-500 border border-gray-300">
+                              No saved projects yet
+                            </td>
+                          </tr>
+                        )}
+                        <tr>
+                          <td className="px-3 py-2 border border-gray-300"></td>
+                          <td className="px-3 py-2 text-center border border-gray-300">
+                            <button
+                              onClick={() => handleConfirmMerge('addition')}
+                              disabled={!Object.values(projectSelections).some(s => s.addition)}
+                              className="px-4 py-2 text-sm text-white rounded transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                              style={{ backgroundColor: '#6A7E76' }}
+                            >
+                              Confirm
+                            </button>
+                          </td>
+                          <td className="px-3 py-2 text-center border border-gray-300">
+                            <button
+                              onClick={() => handleConfirmMerge('overwrite')}
+                              disabled={!Object.values(projectSelections).some(s => s.overwrite)}
+                              className="px-4 py-2 text-sm text-white rounded transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                              style={{ backgroundColor: '#6A7E76' }}
+                            >
+                              Confirm
+                            </button>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+
+              {/* Preview Section - Full Width Below */}
+              {uploadMergeMaterials.length > 0 && (
+                <div className="pb-8">
+                  <h2 className="text-2xl font-bold mb-4 font-heading">Preview</h2>
+                  <div className="bg-white rounded-lg shadow-md border border-gray-200">
+                    <table className="w-full divide-y divide-gray-200">
+                      <thead style={{ backgroundColor: '#90AAA1' }}>
+                        <tr>
+                          <th className="px-3 py-2 text-left text-xs font-medium text-white" style={{ minWidth: '80px' }}>Code</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium text-white" style={{ minWidth: '100px' }}>Area</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium text-white" style={{ minWidth: '150px' }}>Location of Finish</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium text-white" style={{ minWidth: '80px' }}>Material</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium text-white" style={{ minWidth: '280px' }}>Recommended Supplier</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium text-white" style={{ minWidth: '100px' }}>Price</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {uploadMergeMaterials.map((item, index) => (
+                          <tr key={index} className="hover:bg-gray-50">
+                            <td className="px-3 py-2 text-xs font-medium text-gray-900">{item.code}</td>
+                            <td className="px-3 py-2 text-xs text-gray-700">{item.area || '-'}</td>
+                            <td className="px-3 py-2 text-xs text-gray-700">{item.location || '-'}</td>
+                            <td className="px-3 py-2 text-xs text-gray-700">{item.type || '-'}</td>
+                            <td className="px-3 py-2 text-xs text-gray-700">{item.supplierAndContact || '-'}</td>
+                            <td className="px-3 py-2 text-xs text-gray-700">
+                              <div className="text-xs">
+                                <div>Low: {item.pricePerSqm?.low ? `£${item.pricePerSqm.low}` : '-'}</div>
+                                <div>Mid: {item.pricePerSqm?.mid ? `£${item.pricePerSqm.mid}` : '-'}</div>
+                                <div>High: {item.pricePerSqm?.high ? `£${item.pricePerSqm.high}` : '-'}</div>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {showImport && !showUploadMerge && materials.length === 0 && !isParsing && (
           <div className="h-full flex items-center justify-center p-8">
             <div className="w-full max-w-2xl">
-              <h3 className="text-2xl font-bold text-gray-800 mb-6 text-center">
+              <h3 className="text-2xl font-bold text-gray-800 mb-6 text-center font-heading">
                 Import CSV or Excel File
               </h3>
               <div
@@ -1134,7 +1523,7 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {isParsing && (
+        {isParsing && !showUploadMerge && (
           <div className="h-full flex items-center justify-center">
             <div className="text-center">
               <Loader2 className="w-16 h-16 mx-auto mb-4 animate-spin" style={{ color: '#42504A' }} />
@@ -1148,27 +1537,9 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {!showUploader && !showImport && materials.length === 0 && (
+        {!showUploader && !showImport && !showUploadMerge && materials.length === 0 && (
           <div className="h-full flex items-center justify-center">
             <div className="text-center max-w-lg px-8">
-              <div className="mb-8">
-                <svg 
-                  className="w-24 h-24 mx-auto mb-6 text-gray-300" 
-                  fill="none" 
-                  stroke="currentColor" 
-                  viewBox="0 0 24 24"
-                >
-                  <path 
-                    strokeLinecap="round" 
-                    strokeLinejoin="round" 
-                    strokeWidth={1.5} 
-                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" 
-                  />
-                </svg>
-              </div>
-              <h2 className="text-3xl font-bold text-gray-800 mb-4">
-                No Saved Projects Yet
-              </h2>
               <p className="text-lg text-gray-600 mb-8">
                 Start by generating your first material schedule. Upload an image of your space and let AI analyze the materials for you.
               </p>
@@ -1196,10 +1567,10 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {showUploader && materials.length === 0 && !isLoading && (
+        {showUploader && !showUploadMerge && materials.length === 0 && !isLoading && (
           <div className="h-full flex items-center justify-center p-8">
             <div className="w-full max-w-2xl">
-              <h3 className="text-2xl font-bold text-gray-800 mb-6 text-center">
+              <h3 className="text-2xl font-bold text-gray-800 mb-6 text-center font-heading">
                 Upload an Image to Generate Schedule
               </h3>
               <ImageUpload
@@ -1216,11 +1587,11 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {isLoading && (
+        {isLoading && !showUploadMerge && (
           <div className="h-full flex items-center justify-center">
             <div className="text-center">
               <Loader2 className="w-16 h-16 mx-auto mb-4 animate-spin" style={{ color: '#42504A' }} />
-              <h3 className="text-2xl font-bold text-gray-800 mb-2">
+              <h3 className="text-2xl font-bold text-gray-800 mb-2 font-heading">
                 Generating Your Schedule
               </h3>
               <p className="text-lg text-gray-600">
@@ -1230,8 +1601,19 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {materials.length > 0 && !isLoading && (
+        {materials.length > 0 && !isLoading && !showUploadMerge && (
           <div className="py-8 pr-8">
+            {/* Save Changes Success Toast */}
+            {showSaveChangesToast && (
+              <div className="fixed top-4 right-4 z-50 animate-fade-in">
+                <div className="bg-green-500 text-white px-4 py-3 rounded-lg shadow-lg flex items-center space-x-2">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span className="font-medium">Changes saved successfully!</span>
+                </div>
+              </div>
+            )}
             {/* Save Project / Save Changes Buttons */}
             {!isSharedProject() && (
               <div className="mb-6 flex justify-end space-x-3">
@@ -1262,7 +1644,7 @@ export default function DashboardPage() {
             {showSaveDialog && (
               <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                 <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4">
-                  <h3 className="text-2xl font-bold text-gray-800 mb-4">
+                  <h3 className="text-2xl font-bold text-gray-800 mb-4 font-heading">
                     Save Project
                   </h3>
                   <input
@@ -1334,7 +1716,7 @@ export default function DashboardPage() {
             {showOverwriteDialog && (
               <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                 <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4">
-                  <h3 className="text-2xl font-bold text-gray-800 mb-4">
+                  <h3 className="text-2xl font-bold text-gray-800 mb-4 font-heading">
                     Overwrite Project?
                   </h3>
                   <p className="text-gray-600 mb-6">
@@ -1353,6 +1735,7 @@ export default function DashboardPage() {
                     <button
                       onClick={async () => {
                         if (currentProjectId && pendingMaterials.length > 0 && !isSharedProject()) {
+                          setIsOverwriting(true);
                           try {
                             await updateDoc(doc(db, 'projects', currentProjectId), {
                               materials: pendingMaterials,
@@ -1362,17 +1745,33 @@ export default function DashboardPage() {
                             setShowOverwriteDialog(false);
                             setPendingMaterials([]);
                             setError(null);
+                            
+                            // Show success toast
+                            setShowSaveChangesToast(true);
+                            setTimeout(() => {
+                              setShowSaveChangesToast(false);
+                            }, 3000);
                           } catch (error) {
                             console.error('Error updating project:', error);
                             setError('Failed to update project');
                             setShowOverwriteDialog(false);
+                          } finally {
+                            setIsOverwriting(false);
                           }
                         }
                       }}
-                      className="px-6 py-3 text-white rounded-lg transition-opacity hover:opacity-90"
+                      disabled={isOverwriting}
+                      className="px-6 py-3 text-white rounded-lg transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
                       style={{ backgroundColor: '#42504A' }}
                     >
-                      Yes, Overwrite
+                      {isOverwriting ? (
+                        <>
+                          <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        'Yes, Overwrite'
+                      )}
                     </button>
                   </div>
                 </div>
@@ -1383,7 +1782,7 @@ export default function DashboardPage() {
             {showShareDialog && shareProjectId && (
               <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                 <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4">
-                  <h3 className="text-2xl font-bold text-gray-800 mb-4">
+                  <h3 className="text-2xl font-bold text-gray-800 mb-4 font-heading">
                     Share Project
                   </h3>
                   <p className="text-gray-600 mb-4">
