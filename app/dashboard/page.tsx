@@ -1129,21 +1129,21 @@ export default function DashboardPage() {
 
         {/* Button Container */}
         <div className="w-full max-w-xs space-y-2">
-          {/* Generate Schedule Button */}
-          <button
-            onClick={handleGenerateSchedule}
+        {/* Generate Schedule Button */}
+        <button
+          onClick={handleGenerateSchedule}
             className={`w-full text-left py-3 text-2xl font-semibold font-heading transition-colors ${
               generateViewActive
                 ? 'text-white underline underline-offset-8 decoration-2'
                 : 'text-white/80 hover:text-white hover:underline hover:underline-offset-8'
             }`}
-          >
-            Generate Schedule
-          </button>
+        >
+          Generate Schedule
+        </button>
 
-          {/* Import Button */}
-          <button
-            onClick={handleImport}
+        {/* Import Button */}
+        <button
+          onClick={handleImport}
             className={`w-full text-left py-3 text-2xl font-semibold font-heading transition-colors ${
               importViewActive
                 ? 'text-white underline underline-offset-8 decoration-2'
@@ -1151,7 +1151,7 @@ export default function DashboardPage() {
             }`}
           >
             Import File
-          </button>
+        </button>
 
           {/* Upload Button */}
           <button
@@ -1224,8 +1224,8 @@ export default function DashboardPage() {
 
         {/* Shared Projects Section */}
         {sharedProjects.length > 0 && (
-          <div className="w-full max-w-xs mt-12 px-4">
-            <h3 className="text-lg font-semibold text-white mb-4 flex items-center font-heading">
+          <div className="w-full max-w-xs mt-8">
+            <h3 className="text-2xl font-semibold text-white mb-4 flex items-center font-heading">
               <Users className="w-5 h-5 mr-2" />
               Shared With Me
             </h3>
@@ -1362,9 +1362,9 @@ export default function DashboardPage() {
                     <table className="w-full">
                       <thead style={{ backgroundColor: '#90AAA1' }}>
                         <tr>
-                          <th className="px-3 py-2 text-left text-sm font-medium text-white border border-gray-300">Schedule</th>
-                          <th className="px-3 py-2 text-left text-sm font-medium text-white border border-gray-300">Addition</th>
-                          <th className="px-3 py-2 text-left text-sm font-medium text-white border border-gray-300">Overwrite</th>
+                          <th className="px-3 py-2 text-left text-sm font-medium text-white border border-gray-300 font-heading">Schedule</th>
+                          <th className="px-3 py-2 text-left text-sm font-medium text-white border border-gray-300 font-heading">Addition</th>
+                          <th className="px-3 py-2 text-left text-sm font-medium text-white border border-gray-300 font-heading">Overwrite</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1372,7 +1372,7 @@ export default function DashboardPage() {
                           const selection = projectSelections[project.id] || { addition: false, overwrite: false };
                           return (
                             <tr key={project.id} className="border-b border-gray-300">
-                              <td className="px-3 py-2 text-sm font-semibold border border-gray-300">{project.name}</td>
+                              <td className="px-3 py-2 text-sm font-semibold border border-gray-300 font-heading">{project.name}</td>
                               <td className="px-3 py-2 text-center border border-gray-300">
                                 <input
                                   type="checkbox"
@@ -1636,14 +1636,14 @@ export default function DashboardPage() {
             {/* Save Project Button - Only show when no project is loaded */}
             {!isSharedProject() && !currentProjectId && (
               <div className="mb-6 flex justify-end space-x-2">
-                <button
-                  onClick={() => setShowSaveDialog(true)}
-                  className="inline-flex items-center px-6 py-3 text-white font-semibold rounded-lg transition-opacity hover:opacity-90"
+                  <button
+                    onClick={() => setShowSaveDialog(true)}
+                    className="inline-flex items-center px-6 py-3 text-white font-semibold rounded-lg transition-opacity hover:opacity-90"
                   style={{ backgroundColor: '#445D56' }}
-                >
-                  <Save className="w-5 h-5 mr-2" />
-                  Save Project
-                </button>
+                  >
+                    <Save className="w-5 h-5 mr-2" />
+                    Save Project
+                  </button>
               </div>
             )}
 
