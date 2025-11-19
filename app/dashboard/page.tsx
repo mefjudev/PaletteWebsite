@@ -1128,11 +1128,11 @@ export default function DashboardPage() {
         </div>
 
         {/* Button Container */}
-        <div className="w-full max-w-xs space-y-2">
+        <div className="w-full max-w-xs space-y-2 flex flex-col items-center">
         {/* Generate Schedule Button */}
         <button
           onClick={handleGenerateSchedule}
-            className={`w-full text-left py-3 text-2xl font-semibold font-heading transition-colors ${
+            className={`text-center py-3 text-2xl font-semibold font-heading transition-colors ${
               generateViewActive
                 ? 'text-white underline underline-offset-8 decoration-2'
                 : 'text-white/80 hover:text-white hover:underline hover:underline-offset-8'
@@ -1144,7 +1144,7 @@ export default function DashboardPage() {
         {/* Import Button */}
         <button
           onClick={handleImport}
-            className={`w-full text-left py-3 text-2xl font-semibold font-heading transition-colors ${
+            className={`text-center py-3 text-2xl font-semibold font-heading transition-colors ${
               importViewActive
                 ? 'text-white underline underline-offset-8 decoration-2'
                 : 'text-white/80 hover:text-white hover:underline hover:underline-offset-8'
@@ -1156,7 +1156,7 @@ export default function DashboardPage() {
           {/* Upload Button */}
           <button
             onClick={handleUpload}
-            className={`w-full text-left py-3 text-2xl font-semibold font-heading transition-colors ${
+            className={`text-center py-3 text-2xl font-semibold font-heading transition-colors ${
               uploadMergeViewActive
                 ? 'text-white underline underline-offset-8 decoration-2'
                 : 'text-white/80 hover:text-white hover:underline hover:underline-offset-8'
@@ -1167,11 +1167,11 @@ export default function DashboardPage() {
         </div>
 
         {/* Saved Projects Section */}
-        <div className="w-full max-w-xs mt-8">
+        <div className="w-full max-w-xs mt-8 flex flex-col items-center">
           <h3 className="text-2xl font-semibold text-white mb-4 font-heading">
             My Projects
           </h3>
-          <div className="space-y-2">
+          <div className="space-y-2 w-full max-w-[240px]">
             {savedProjects.map((project) => (
               <div
                 key={project.id}
@@ -1224,12 +1224,12 @@ export default function DashboardPage() {
 
         {/* Shared Projects Section */}
         {sharedProjects.length > 0 && (
-          <div className="w-full max-w-xs mt-8">
+          <div className="w-full max-w-xs mt-8 flex flex-col items-center">
             <h3 className="text-2xl font-semibold text-white mb-4 flex items-center font-heading">
               <Users className="w-5 h-5 mr-2" />
               Shared With Me
             </h3>
-            <div className="space-y-2">
+            <div className="space-y-2 w-full max-w-[240px]">
               {sharedProjects.map((project) => (
                 <div
                   key={project.id}
