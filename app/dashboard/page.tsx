@@ -1094,23 +1094,31 @@ export default function DashboardPage() {
     });
   };
 
+  const generateViewActive = showUploader && !showImport && !showUploadMerge;
+  const importViewActive = showImport && !showUploader && !showUploadMerge;
+  const uploadMergeViewActive = showUploadMerge;
+
   return (
     <div className="min-h-screen flex overflow-hidden">
       {/* Left Sidebar */}
       <div className="w-1/3 h-screen flex flex-col items-center overflow-y-auto"
-           style={{ backgroundColor: '#42504A' }}>
+           style={{ backgroundColor: '#445D56' }}>
         
         {/* Logo Box */}
         <div className="w-full px-8 py-8 rounded-lg mb-8"
              style={{ backgroundColor: '#445D56', borderRadius: '0' }}>
           {/* Logo */}
-          <div className="text-[12rem] font-bold text-white mb-6 text-center font-heading" style={{ letterSpacing: '0.05em', lineHeight: '1' }}>
-            P
+          <div className="mb-6 text-center flex justify-center items-center">
+            <img
+              src="/PLogoWhite.svg"
+              alt="Palette Logo"
+              className="h-48 w-auto"
+            />
           </div>
 
           {/* Welcome Section */}
           <div className="text-center">
-            <div className="text-xl text-white mb-2 font-semibold font-heading">
+            <div className="text-3xl text-white mb-2 font-semibold font-heading">
               Welcome Back
             </div>
             <div className="text-sm text-white">
@@ -1120,12 +1128,15 @@ export default function DashboardPage() {
         </div>
 
         {/* Button Container */}
-        <div className="w-full max-w-xs space-y-4">
+        <div className="w-full max-w-xs space-y-2">
           {/* Generate Schedule Button */}
           <button
             onClick={handleGenerateSchedule}
-            className="w-full py-4 px-6 text-2xl text-white font-semibold rounded-lg transition-opacity hover:opacity-80"
-            style={{ backgroundColor: '#6A7E76' }}
+            className={`w-full text-left py-3 text-2xl font-semibold font-heading transition-colors ${
+              generateViewActive
+                ? 'text-white underline underline-offset-8 decoration-2'
+                : 'text-white/80 hover:text-white hover:underline hover:underline-offset-8'
+            }`}
           >
             Generate Schedule
           </button>
@@ -1133,8 +1144,11 @@ export default function DashboardPage() {
           {/* Import Button */}
           <button
             onClick={handleImport}
-            className="w-full py-4 px-6 text-2xl text-white font-semibold rounded-lg transition-opacity hover:opacity-80"
-            style={{ backgroundColor: '#6A7E76' }}
+            className={`w-full text-left py-3 text-2xl font-semibold font-heading transition-colors ${
+              importViewActive
+                ? 'text-white underline underline-offset-8 decoration-2'
+                : 'text-white/80 hover:text-white hover:underline hover:underline-offset-8'
+            }`}
           >
             Import File
           </button>
@@ -1142,16 +1156,19 @@ export default function DashboardPage() {
           {/* Upload Button */}
           <button
             onClick={handleUpload}
-            className="w-full py-4 px-6 text-2xl text-white font-semibold rounded-lg transition-opacity hover:opacity-80"
-            style={{ backgroundColor: '#6A7E76' }}
+            className={`w-full text-left py-3 text-2xl font-semibold font-heading transition-colors ${
+              uploadMergeViewActive
+                ? 'text-white underline underline-offset-8 decoration-2'
+                : 'text-white/80 hover:text-white hover:underline hover:underline-offset-8'
+            }`}
           >
             Upload / Merge
           </button>
         </div>
 
         {/* Saved Projects Section */}
-        <div className="w-full max-w-xs mt-8 px-4">
-          <h3 className="text-lg font-semibold text-white mb-4 font-heading">
+        <div className="w-full max-w-xs mt-8">
+          <h3 className="text-2xl font-semibold text-white mb-4 font-heading">
             My Projects
           </h3>
           <div className="space-y-2">
@@ -1329,9 +1346,11 @@ export default function DashboardPage() {
                         <p className="text-white text-lg">Scanning image...</p>
                       </div>
                     ) : (
-                      <h1 className="text-8xl font-heading text-white" style={{ letterSpacing: '0.1em' }}>
-                        Palette
-                      </h1>
+                      <img
+                        src="/LogoWhite.svg"
+                        alt="Palette Logo"
+                        className="h-32 w-auto ml-4"
+                      />
                     )}
                   </div>
                 </div>
@@ -1387,7 +1406,7 @@ export default function DashboardPage() {
                               onClick={() => handleConfirmMerge('addition')}
                               disabled={!Object.values(projectSelections).some(s => s.addition)}
                               className="px-4 py-2 text-sm text-white rounded transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
-                              style={{ backgroundColor: '#6A7E76' }}
+                              style={{ backgroundColor: '#445D56' }}
                             >
                               Confirm
                             </button>
@@ -1397,7 +1416,7 @@ export default function DashboardPage() {
                               onClick={() => handleConfirmMerge('overwrite')}
                               disabled={!Object.values(projectSelections).some(s => s.overwrite)}
                               className="px-4 py-2 text-sm text-white rounded transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
-                              style={{ backgroundColor: '#6A7E76' }}
+                              style={{ backgroundColor: '#445D56' }}
                             >
                               Confirm
                             </button>
@@ -1527,7 +1546,7 @@ export default function DashboardPage() {
           <div className="h-full flex items-center justify-center">
             <div className="text-center">
               <Loader2 className="w-16 h-16 mx-auto mb-4 animate-spin" style={{ color: '#42504A' }} />
-              <h3 className="text-2xl font-bold text-gray-800 mb-2">
+              <h3 className="text-2xl font-bold text-gray-800 mb-2 font-heading">
                 Parsing File
               </h3>
               <p className="text-lg text-gray-600">
@@ -1546,7 +1565,7 @@ export default function DashboardPage() {
               <button
                 onClick={handleGenerateSchedule}
                 className="inline-flex items-center px-8 py-4 text-lg font-semibold text-white rounded-lg transition-opacity hover:opacity-90"
-                style={{ backgroundColor: '#42504A' }}
+                style={{ backgroundColor: '#6A7E76' }}
               >
                 <svg 
                   className="w-6 h-6 mr-3" 
@@ -1614,29 +1633,17 @@ export default function DashboardPage() {
                 </div>
               </div>
             )}
-            {/* Save Project / Save Changes Buttons */}
-            {!isSharedProject() && (
-              <div className="mb-6 flex justify-end space-x-3">
-                {currentProjectId && (
-                  <button
-                    onClick={() => setShowSaveDialog(true)}
-                    className="inline-flex items-center px-6 py-3 text-white font-semibold rounded-lg transition-opacity hover:opacity-90"
-                    style={{ backgroundColor: '#6A7E76' }}
-                  >
-                    <Save className="w-5 h-5 mr-2" />
-                    Save as New Project
-                  </button>
-                )}
-                {!currentProjectId && (
-                  <button
-                    onClick={() => setShowSaveDialog(true)}
-                    className="inline-flex items-center px-6 py-3 text-white font-semibold rounded-lg transition-opacity hover:opacity-90"
-                    style={{ backgroundColor: '#6A7E76' }}
-                  >
-                    <Save className="w-5 h-5 mr-2" />
-                    Save Project
-                  </button>
-                )}
+            {/* Save Project Button - Only show when no project is loaded */}
+            {!isSharedProject() && !currentProjectId && (
+              <div className="mb-6 flex justify-end space-x-2">
+                <button
+                  onClick={() => setShowSaveDialog(true)}
+                  className="inline-flex items-center px-6 py-3 text-white font-semibold rounded-lg transition-opacity hover:opacity-90"
+                  style={{ backgroundColor: '#445D56' }}
+                >
+                  <Save className="w-5 h-5 mr-2" />
+                  Save Project
+                </button>
               </div>
             )}
 
@@ -1677,7 +1684,7 @@ export default function DashboardPage() {
                       }}
                       disabled={!projectName.trim() || isSaving}
                       className="px-6 py-3 text-white rounded-lg transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
-                      style={{ backgroundColor: '#42504A' }}
+                      style={{ backgroundColor: '#6A7E76' }}
                     >
                       {isSaving ? 'Saving...' : 'Save'}
                     </button>
@@ -1709,6 +1716,8 @@ export default function DashboardPage() {
                   setMaterials(editedMaterials);
                 }
               }}
+              onOpenSaveDialog={() => setShowSaveDialog(true)}
+              currentProjectId={currentProjectId}
               readOnly={isSharedProject()}
             />
             
@@ -1762,7 +1771,7 @@ export default function DashboardPage() {
                       }}
                       disabled={isOverwriting}
                       className="px-6 py-3 text-white rounded-lg transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
-                      style={{ backgroundColor: '#42504A' }}
+                      style={{ backgroundColor: '#6A7E76' }}
                     >
                       {isOverwriting ? (
                         <>
@@ -1880,7 +1889,7 @@ export default function DashboardPage() {
                       onClick={shareProjectWithUser}
                       disabled={!shareEmail.trim() || isSharing}
                       className="px-6 py-3 text-white rounded-lg transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
-                      style={{ backgroundColor: '#42504A' }}
+                      style={{ backgroundColor: '#6A7E76' }}
                     >
                       {isSharing ? (
                         <>

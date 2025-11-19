@@ -11,7 +11,9 @@ interface MaterialScheduleProps {
   isLoading: boolean;
   onMaterialsChange?: (materials: BIMItem[]) => void;
   onSaveChanges?: (materials: BIMItem[]) => void;
+  onOpenSaveDialog?: () => void;
   readOnly?: boolean; // If true, disable editing
+  currentProjectId?: string | null; // To show Save As button only when project is loaded
 }
 
 type FilterCategory = 'All' | 'Timber' | 'Metal' | 'Glass' | 'Plastic' | 'Specialist' | 'Fabric' | 'Sanitaryware' | 'Ironmongery' | 'Ceramic Tiles' | 'Paint' | 'Stone' | 'Unknown';
@@ -49,7 +51,7 @@ const CODE_TO_CATEGORY: Record<string, FilterCategory> = {
   'UN': 'Unknown',
 };
 
-const MaterialSchedule: React.FC<MaterialScheduleProps> = ({ materials, isLoading, onMaterialsChange, onSaveChanges, readOnly = false }) => {
+const MaterialSchedule: React.FC<MaterialScheduleProps> = ({ materials, isLoading, onMaterialsChange, onSaveChanges, onOpenSaveDialog, readOnly = false, currentProjectId }) => {
   const [activeFilter, setActiveFilter] = useState<FilterCategory>('All');
   const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
   const [editedMaterials, setEditedMaterials] = useState<BIMItem[]>([]);
@@ -618,25 +620,35 @@ const MaterialSchedule: React.FC<MaterialScheduleProps> = ({ materials, isLoadin
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-lg font-semibold text-gray-900 font-heading">BIM Material Schedule</h3>
             <div className="flex space-x-2">
+              {onOpenSaveDialog && (
+                <button
+                  onClick={onOpenSaveDialog}
+                  className="flex items-center px-3 py-2 text-sm text-white rounded-md transition-opacity hover:opacity-90"
+                  style={{ backgroundColor: '#445D56' }}
+                >
+                  <Save className="w-4 h-4 mr-2" />
+                  Save As
+                </button>
+              )}
               <button
                 onClick={copyToClipboard}
-                className="flex items-center px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"
+                className="flex items-center px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-opacity hover:opacity-90"
               >
                 <Copy className="w-4 h-4 mr-2" />
                 Copy
               </button>
               <button
                 onClick={exportToCSV}
-                className="flex items-center px-3 py-2 text-sm text-white rounded-md transition-colors"
-                style={{ backgroundColor: '#42504A' }}
+                className="flex items-center px-3 py-2 text-sm text-white rounded-md transition-opacity hover:opacity-90"
+                style={{ backgroundColor: '#445D56' }}
               >
                 <Download className="w-4 h-4 mr-2" />
                 Export CSV
               </button>
               <button
                 onClick={exportToExcel}
-                className="flex items-center px-3 py-2 text-sm text-white rounded-md transition-colors"
-                style={{ backgroundColor: '#42504A' }}
+                className="flex items-center px-3 py-2 text-sm text-white rounded-md transition-opacity hover:opacity-90"
+                style={{ backgroundColor: '#445D56' }}
               >
                 <FileSpreadsheet className="w-4 h-4 mr-2" />
                 Export Excel
@@ -646,7 +658,7 @@ const MaterialSchedule: React.FC<MaterialScheduleProps> = ({ materials, isLoadin
         </div>
         
         {/* Filter Bar */}
-        <div className="border-t border-black px-6 py-3" style={{ backgroundColor: '#42504A' }}>
+        <div className="border-t border-black px-6 py-3" style={{ backgroundColor: '#445D56' }}>
           <div className="flex flex-wrap gap-2">
             {availableCategories.map((category) => (
               <button
@@ -688,7 +700,7 @@ const MaterialSchedule: React.FC<MaterialScheduleProps> = ({ materials, isLoadin
       )}
       <div className="p-6">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold text-gray-900">BIM Material Schedule</h3>
+          <h3 className="text-lg font-semibold text-gray-900 font-heading">BIM Material Schedule</h3>
           <div className="flex space-x-2 items-center">
             {readOnly && (
               <div className="mr-2 px-3 py-1 bg-yellow-100 border border-yellow-300 rounded-md">
@@ -699,8 +711,8 @@ const MaterialSchedule: React.FC<MaterialScheduleProps> = ({ materials, isLoadin
               <>
                 <button
                   onClick={handleAddNewRow}
-                  className="flex items-center px-3 py-2 text-sm text-white rounded-md transition-colors"
-                  style={{ backgroundColor: '#6A7E76' }}
+                  className="flex items-center px-3 py-2 text-sm text-white rounded-md transition-opacity hover:opacity-90"
+                  style={{ backgroundColor: '#445D56' }}
                   title="Add new row"
                 >
                   <Plus className="w-4 h-4 mr-2" />
@@ -708,8 +720,8 @@ const MaterialSchedule: React.FC<MaterialScheduleProps> = ({ materials, isLoadin
                 </button>
                 <button
                   onClick={handleOpenUploadSheet}
-                  className="flex items-center px-3 py-2 text-sm text-white rounded-md transition-colors"
-                  style={{ backgroundColor: '#6A7E76' }}
+                  className="flex items-center px-3 py-2 text-sm text-white rounded-md transition-opacity hover:opacity-90"
+                  style={{ backgroundColor: '#445D56' }}
                   title="Upload image to scan new materials"
                 >
                   <Upload className="w-4 h-4 mr-2" />
@@ -717,11 +729,21 @@ const MaterialSchedule: React.FC<MaterialScheduleProps> = ({ materials, isLoadin
                 </button>
               </>
             )}
+            {onOpenSaveDialog && (
+              <button
+                onClick={onOpenSaveDialog}
+                className="flex items-center px-3 py-2 text-sm text-white rounded-md transition-opacity hover:opacity-90"
+                style={{ backgroundColor: '#445D56' }}
+              >
+                <Save className="w-4 h-4 mr-2" />
+                Save As
+              </button>
+            )}
             {hasUnsavedChanges && selectedRows.size === 0 && onSaveChanges && !readOnly && (
               <button
                 onClick={handleSaveChanges}
-                className="flex items-center px-3 py-2 text-sm text-white rounded-md transition-colors"
-                style={{ backgroundColor: '#6A7E76' }}
+                className="flex items-center px-3 py-2 text-sm text-white rounded-md transition-opacity hover:opacity-90"
+                style={{ backgroundColor: '#445D56' }}
               >
                 <Save className="w-4 h-4 mr-2" />
                 Save Changes
@@ -729,23 +751,24 @@ const MaterialSchedule: React.FC<MaterialScheduleProps> = ({ materials, isLoadin
             )}
             <button
               onClick={copyToClipboard}
-              className="flex items-center px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"
+              className="flex items-center px-3 py-2 text-sm text-white rounded-md transition-opacity hover:opacity-90"
+              style={{ backgroundColor: '#445D56' }}
             >
               <Copy className="w-4 h-4 mr-2" />
               Copy
             </button>
             <button
               onClick={exportToCSV}
-              className="flex items-center px-3 py-2 text-sm text-white rounded-md transition-colors"
-              style={{ backgroundColor: '#6A7E76' }}
+              className="flex items-center px-3 py-2 text-sm text-white rounded-md transition-opacity hover:opacity-90"
+              style={{ backgroundColor: '#445D56' }}
             >
               <Download className="w-4 h-4 mr-2" />
               Export CSV
             </button>
             <button
               onClick={exportToExcel}
-              className="flex items-center px-3 py-2 text-sm text-white rounded-md transition-colors"
-              style={{ backgroundColor: '#6A7E76' }}
+              className="flex items-center px-3 py-2 text-sm text-white rounded-md transition-opacity hover:opacity-90"
+              style={{ backgroundColor: '#445D56' }}
             >
               <FileSpreadsheet className="w-4 h-4 mr-2" />
               Export Excel
@@ -769,7 +792,7 @@ const MaterialSchedule: React.FC<MaterialScheduleProps> = ({ materials, isLoadin
       </div>
       
       {/* Filter Bar */}
-      <div className="border-t border-black px-6 py-3" style={{ backgroundColor: '#42504A' }}>
+      <div className="border-t border-black px-6 py-3" style={{ backgroundColor: '#445D56' }}>
         <div className="flex flex-wrap gap-2">
           {availableCategories.map((category) => (
             <button
@@ -1061,7 +1084,7 @@ const MaterialSchedule: React.FC<MaterialScheduleProps> = ({ materials, isLoadin
                   onClick={handleAppendSelectedMaterials}
                   disabled={selectedScannedMaterials.size === 0}
                   className="flex items-center px-4 py-2 text-sm text-white rounded-md transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
-                  style={{ backgroundColor: '#42504A' }}
+                  style={{ backgroundColor: '#445D56' }}
                 >
                   <Check className="w-4 h-4 mr-2" />
                   Append Selected ({selectedScannedMaterials.size})

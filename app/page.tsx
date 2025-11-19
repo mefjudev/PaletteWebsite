@@ -91,15 +91,20 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4"
-         style={{ backgroundColor: '#42504A' }}>
-      {/* Logo/Title */}
-      <h1 className="text-7xl md:text-8xl font-heading text-white mb-12" style={{ letterSpacing: '0.1em' }}>
-        Palette
-      </h1>
+         style={{ backgroundColor: '#445D56' }}>
+      <div className="w-full max-w-md flex flex-col items-center">
+        {/* Logo */}
+        <div className="mb-12 w-full px-8 flex justify-center items-center">
+          <img
+            src="/LogoWhite.svg"
+            alt="Palette Logo"
+            className="h-36 w-auto ml-4"
+          />
+        </div>
 
-      {/* Login Form Container */}
-      <div className="w-full max-w-md p-8 rounded-lg"
-           style={{ backgroundColor: '#596B64' }}>
+        {/* Login Form Container */}
+        <div className="w-full p-8 rounded-lg"
+             style={{ backgroundColor: '#596B64' }}>
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Login/Email Field */}
           <div className="flex flex-col">
@@ -178,6 +183,7 @@ export default function LoginPage() {
               </button>
             </>
           )}
+        </div>
         </div>
       </div>
     </div>

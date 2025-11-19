@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_1" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1635.66 565.6">
+  <defs>
+    <style>
+      .cls-1 {
+        letter-spacing: -.02em;
+      }
+
+      .cls-2 {
+        letter-spacing: -.01em;
+      }
+
+      .cls-3 {
+        letter-spacing: -.01em;
+      }
+
+      .cls-4 {
+        fill: #fff;
+        font-family: IbarraRealNova-Regular, 'Ibarra Real Nova';
+        font-size: 515.83px;
+        font-variation-settings: 'wght' 400;
+      }
+    </style>
+  </defs>
+  <text class="cls-4" transform="translate(0 431.49)"><tspan class="cls-1" x="0" y="0">P</tspan><tspan x="332.71" y="0">a</tspan><tspan class="cls-2" x="573.08" y="0">l</tspan><tspan x="705.13" y="0">et</tspan><tspan class="cls-3" x="1105.91" y="0">t</tspan><tspan x="1267.36" y="0">e </tspan></text>
+</svg>
